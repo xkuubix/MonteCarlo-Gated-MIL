@@ -1,4 +1,4 @@
-neptune: False
+neptune: True
 seed: 42
 device: 'cuda'
 
