@@ -34,7 +34,7 @@ training_plan:
     num_workers: 0
     lr: 0.0005
     wd: 0.001
-    epochs: 1
+    epochs: 150
     patience: 25
 
   criterion: 'bce'
