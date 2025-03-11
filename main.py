@@ -33,6 +33,7 @@ if __name__ == "__main__":
     else:
         run = None
     model = GatedAttentionMIL(resnet_type="resnet18")
+    model.to(device)
     dataloaders = utils.get_dataloaders(config)
     if config['training_plan']['criterion'].lower() == 'bce':
         criterion = torch.nn.BCELoss()
