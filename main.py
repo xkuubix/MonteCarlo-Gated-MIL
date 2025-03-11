@@ -16,7 +16,7 @@ if __name__ == "__main__":
     
     parser = utils.get_args_parser()
     args, unknown = parser.parse_known_args()
-    with open(args.config_path) as file:
+    with open(args.config) as file:
         config = yaml.load(file, Loader=yaml.FullLoader)
     
     selected_device = config['device']
