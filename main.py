@@ -29,6 +29,7 @@ if __name__ == "__main__":
 
     if config["neptune"]:
         run = neptune.init_run(project="ProjektMMG/MCDO")
+        run["config"] = config
     else:
         run = None
     model = GatedAttentionMIL(resnet_type="resnet18")
