@@ -2,13 +2,13 @@ neptune: False
 seed: 42
 device: ['cpu']
 
-model_path: '/media/dysk_a/jr_buler/mammografia/Zapisy/models'
+model_path: '/users/scratch1/jbuler/models'
 
 data:
   fraction_train_rest: 0.75
   fraction_val_test: 0.5
-  root_path: '/media/dysk_a/jr_buler/Mammografie'
-  metadata_path: '/media/dysk_a/jr_buler/mammografia/Zapisy/stats_pickle'
+  root_path: '/users/project1/pt01190/mmg'
+  metadata_path: '/users/project1/pt01190/mmg/stats_pickle'
   
   view: ['CC', 'MLO']
   size: [7036, 2800]
