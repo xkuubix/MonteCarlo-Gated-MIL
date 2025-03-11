@@ -19,7 +19,7 @@ if __name__ == "__main__":
     with open(args.config_path) as file:
         config = yaml.load(file, Loader=yaml.FullLoader)
     
-    selected_device = config['device'][0]
+    selected_device = config['device']
     device = torch.device(selected_device if torch.cuda.is_available() else "cpu")
     
     seed = config['seed']
