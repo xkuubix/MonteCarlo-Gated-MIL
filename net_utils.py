@@ -1,4 +1,6 @@
 import torch
+import copy
+
 
 def train(model, dataloader, criterion, optimizer, device, neptune_run, epoch):
     model.train()
@@ -83,10 +85,6 @@ def test(model, dataloader, device, neptune_run):
         neptune_run["test/predictions"].log(all_preds)
         neptune_run["test/targets"].log(all_targets)
     print(f"Test Accuracy: {test_acc:.4f}")
-
-
-import torch
-import copy
 
 class EarlyStopping:
     def __init__(self, patience=5, nepune_run=None):
