@@ -11,7 +11,7 @@ def get_args_parser():
     specyfying datasets/training params'''
 
     parser = argparse.ArgumentParser()
-    parser.add_argument("--config_path", type=str,
+    parser.add_argument("--config", type=str,
                         default=default,
                         help=help)
     return parser
