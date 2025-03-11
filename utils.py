@@ -1,7 +1,7 @@
 from pandas import DataFrame
 from torch.utils.data import DataLoader
 import pandas as pd
-from torchvision import transforms as T
+from torchvision.transforms import v2 as T
 from dataset import BreastCancerDataset
 import argparse
 
@@ -41,7 +41,6 @@ def get_dataloaders(config):
     train_transforms = T.Compose([T.RandomHorizontalFlip(),
                                   T.RandomVerticalFlip(),
                                   T.GaussianBlur(3),
-                                  T.Noise(0.1),
                                   ])
     train_dataset = BreastCancerDataset(root=root,
                                         df=train_set,
