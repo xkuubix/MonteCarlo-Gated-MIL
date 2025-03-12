@@ -65,4 +65,6 @@ if __name__ == "__main__":
     if run is not None:
         run["best_model_path"].log(model_name)
     test(model, dataloaders['test'], device, run)
+    if run is not None:
+        run.stop()
 # %%
