@@ -20,9 +20,6 @@ def train(model, dataloader, criterion, optimizer, device, neptune_run, epoch):
         preds = (outputs.view(-1) > 0.5).float()
         correct += (preds == targets).sum().item()
         total += targets.size(0)
-        if neptune_run is not None:
-            neptune_run["train/batch_loss"].log(loss.item())
-            neptune_run["train/batch_acc"].log(correct / total)
     epoch_loss = running_loss / len(dataloader)
     epoch_acc = correct / total
     
@@ -69,7 +66,8 @@ def test(model, dataloader, device, neptune_run):
         for batch in dataloader:
             images, targets = batch['image'].to(device), batch['target']['label'].to(device)
             outputs, _ = model(images)
-            preds = (outputs.view(-1) > 0.5).float()
+            output = torch.sigmoid(outputs.squeeze(0))
+            preds = (output.view(-1) > 0.5).float()
             
             correct += (preds == targets).sum().item()
             total += targets.size(0)
