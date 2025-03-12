@@ -32,7 +32,7 @@ if __name__ == "__main__":
         run["config"] = config
     else:
         run = None
-    model = GatedAttentionMIL(resnet_type="resnet18")
+    model = GatedAttentionMIL()
     model.to(device)
     dataloaders = utils.get_dataloaders(config)
     if config['training_plan']['criterion'].lower() == 'bce':
@@ -49,16 +49,14 @@ if __name__ == "__main__":
     else:
         raise ValueError("Optimizer not supported")
   
-
     early_stopping = EarlyStopping(patience=config['training_plan']['parameters']['patience'], nepune_run=run)
 
-
     for epoch in range(1, config['training_plan']['parameters']['epochs'] + 1):
-        model = train(model=model, dataloader=dataloaders['train'],
+        train(model=model, dataloader=dataloaders['train'],
                       criterion=criterion, optimizer=optimizer, device=device, neptune_run=run, epoch=epoch)
-        val_loss, val_acc = validate(model=model, dataloader=dataloaders['val'],
-                                     criterion=criterion, device=device, neptune_run=run, epoch=epoch)
-        if early_stopping(val_loss, val_acc, model):
+        val_loss = validate(model=model, dataloader=dataloaders['val'],
+                            criterion=criterion, device=device, neptune_run=run, epoch=epoch)
+        if early_stopping(val_loss, model):
             print(f"Early stopping at epoch {epoch}")
             break
     model_name = uuid.uuid4().hex
