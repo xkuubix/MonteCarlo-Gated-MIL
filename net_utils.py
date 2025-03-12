@@ -12,10 +12,10 @@ def train(model, dataloader, criterion, optimizer, device, neptune_run, epoch):
         for param in model.parameters():
             param.grad = None
         outputs, _ = model(images)
-        loss = criterion(outputs.view(-1), targets)
+        output = torch.sigmoid(outputs.squeeze(0))
+        loss = criterion(output, targets.unsqueeze(0))
         loss.backward()
         optimizer.step()
-        
         running_loss += loss.item()
         preds = (outputs.view(-1) > 0.5).float()
         correct += (preds == targets).sum().item()
@@ -23,7 +23,6 @@ def train(model, dataloader, criterion, optimizer, device, neptune_run, epoch):
         if neptune_run is not None:
             neptune_run["train/batch_loss"].log(loss.item())
             neptune_run["train/batch_acc"].log(correct / total)
-        
     epoch_loss = running_loss / len(dataloader)
     epoch_acc = correct / total
     
@@ -32,7 +31,6 @@ def train(model, dataloader, criterion, optimizer, device, neptune_run, epoch):
         neptune_run["train/epoch_acc"].log(epoch_acc)
     print(f"Epoch {epoch} - Train Loss: {epoch_loss:.4f}, Accuracy: {epoch_acc:.4f}")
 
-    return model
 
 def validate(model, dataloader, criterion, device, neptune_run, epoch):
     model.eval()
@@ -44,8 +42,8 @@ def validate(model, dataloader, criterion, device, neptune_run, epoch):
         for batch in dataloader:
             images, targets = batch['image'].to(device), batch['target']['label'].to(device)
             outputs, _ = model(images)
-            loss = criterion(outputs.view(-1), targets)
-            
+            output = torch.sigmoid(outputs.squeeze(0))
+            loss = criterion(output, targets.unsqueeze(0))
             running_loss += loss.item()
             preds = (outputs.view(-1) > 0.5).float()
             correct += (preds == targets).sum().item()
@@ -58,7 +56,7 @@ def validate(model, dataloader, criterion, device, neptune_run, epoch):
         neptune_run["val/epoch_loss"].log(epoch_loss)
         neptune_run["val/epoch_acc"].log(epoch_acc)
     print(f"Epoch {epoch} - Val Loss: {epoch_loss:.4f}, Accuracy: {epoch_acc:.4f}")
-    return epoch_loss, epoch_acc
+    return epoch_loss
 
 def test(model, dataloader, device, neptune_run):
     model.eval()
@@ -91,20 +89,14 @@ class EarlyStopping:
         self.patience = patience
         self.counter = 0
         self.best_loss = float('inf')
-        self.best_acc = 0.0
         self.best_model_state = None
         self.neptune_run = nepune_run
 
-    def __call__(self, current_loss, current_acc, model):
+    def __call__(self, current_loss, model):
         copy_model = False
         
         if current_loss < self.best_loss:
             self.best_loss = current_loss
-            self.best_acc = current_acc
-            self.counter = 0
-            copy_model = True
-        elif current_acc > self.best_acc:
-            self.best_acc = current_acc
             self.counter = 0
             copy_model = True
         else:
