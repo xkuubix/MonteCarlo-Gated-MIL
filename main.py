@@ -64,6 +64,9 @@ if __name__ == "__main__":
     torch.save(early_stopping.get_best_model_state(), model_name)
     if run is not None:
         run["best_model_path"].log(model_name)
+    model = GatedAttentionMIL()
+    model.load_state_dict(torch.load(model_name))
+    model.to(device)
     test(model, dataloaders['test'], device, run)
     if run is not None:
         run.stop()
