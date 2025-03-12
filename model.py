@@ -3,79 +3,102 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 import torchvision.models as models
-from einops import rearrange, reduce
-
-class GatedAttentionMIL(nn.Module):
-    def __init__(self, resnet_type="resnet18", attention_dim=128, output_dim=1, dropout_rate=0.5):
-        super(GatedAttentionMIL, self).__init__()
-
-        self.resnet = getattr(models, resnet_type)(weights="IMAGENET1K_V1")
-        self.feature_dim = list(self.resnet.children())[-1].in_features
-        self.resnet = nn.Sequential(*list(self.resnet.children())[:-1])  
-        self.flatten = nn.Flatten()
-
-        self.attention_V = nn.Linear(self.feature_dim, attention_dim)
-        self.attention_U = nn.Linear(self.feature_dim, attention_dim)
-        self.attention_weights = nn.Linear(attention_dim, 1)
-
-        self.feature_dropout = nn.Dropout(dropout_rate)
-        self.attention_dropout = nn.Dropout(dropout_rate)
-
-        self.classifier = nn.Linear(self.feature_dim, output_dim)
-
-    def _extract_features(self, x):
-        x = rearrange(x, "b n c h w -> (b n) c h w")  
-        features = self.resnet(x)
-        features = self.flatten(features)  
-        return features
-
-    def _apply_dropout(self, features):
-        return self.feature_dropout(features)
-
-    def _compute_attention(self, features, batch_size, num_patches):
-        A_V = self.attention_V(features)
-        A_U = self.attention_U(features)
-        A = torch.tanh(A_V) * torch.sigmoid(A_U)
-        A = self.attention_dropout(A)  
-        A = self.attention_weights(A)  
-        A = F.softmax(A, dim=1)  
-        features = rearrange(features, "(b n) d -> b n d", b=batch_size, n=num_patches)
-        return A, features
-
-    def _classify(self, aggregated_features):
-        output = self.classifier(aggregated_features)
-        output = torch.sigmoid(output)
-        return output
+class Flatten(nn.Module):
+    def __init__(self, dim=1):
+        super().__init__()
+        self.dim = dim
 
     def forward(self, x):
-        batch_size, num_patches, C, H, W = x.shape
-        features = self._extract_features(x)
-        features = self._apply_dropout(features)
-        A, features = self._compute_attention(features, batch_size, num_patches)
-        aggregated_features = reduce(A * features, "b n d -> b d", "sum")
-        output = self._classify(aggregated_features)
-        return output, A
+        input_shape = x.shape
+        output_shape = [input_shape[i] for i in range(self.dim)] + [-1]
+        return x.view(*output_shape)
 
-    def predict(self, x, mc_samples=10):
-        self.train()
-        self.apply(lambda m: m.eval() if isinstance(m, nn.BatchNorm2d) else None)
+class Identity(nn.Module):
+    def __init__(self):
+        super().__init__()
 
-        batch_size, num_patches, C, H, W = x.shape
-        features = self._extract_features(x)
-        outputs = []
-        attentions = []
+    def forward(self, x):
+        return x
 
-        for _ in range(mc_samples):
-            dropped_features = self._apply_dropout(features)
-            A, dropped_features = self._compute_attention(dropped_features, batch_size, num_patches)
-            aggregated_features = reduce(A * dropped_features, "b n d -> b d", "sum")
-            output = self._classify(aggregated_features)
-            outputs.append(output)
-            attentions.append(A)
-            torch.cuda.empty_cache()
-            gc.collect()  
 
-        outputs = torch.stack(outputs, dim=0)
-        attentions = torch.stack(attentions, dim=0)
+class GatedAttentionMIL(nn.Module):
 
-        return outputs, attentions
+    def __init__(
+                self,
+                num_classes=1,
+                pretrained=True,
+                L=512,
+                D=128,
+                K=1,
+                feature_dropout=0.25,
+                attention_dropout=0.15):
+
+        super().__init__()
+        self.L = L  
+        self.D = D
+        self.K = K
+        if pretrained:
+            weights = models.ResNet18_Weights.IMAGENET1K_V1
+            self.feature_extractor = models.resnet18(weights=weights)
+        else:
+            self.feature_extractor = models.resnet18()
+        self.num_features = self.feature_extractor.fc.in_features
+        self.feature_extractor.fc = Identity()
+
+        self.attention_V = nn.Sequential(
+            nn.Linear(self.L, self.D),
+            nn.Tanh(),
+            nn.Dropout(attention_dropout)
+        )
+        self.attention_U = nn.Sequential(
+            nn.Linear(self.L, self.D),
+            nn.Sigmoid(),
+            nn.Dropout(attention_dropout)
+        )
+        self.attention_weights = nn.Linear(self.D, self.K)
+        self.classifier = nn.Sequential(
+                                        nn.Linear(self.L * self.K,
+                                                  num_classes))
+        self.feature_dropout = nn.Dropout(feature_dropout)
+
+    def forward(self, x):
+        bs, num_instances, ch, w, h = x.shape
+        x = x.view(bs*num_instances, ch, w, h)
+        H = self.feature_extractor(x)
+        H = self.feature_dropout(H)
+        H = H.view(bs, num_instances, -1)
+        A_V = self.attention_V(H)
+        A_U = self.attention_U(H)
+        A = self.attention_weights(torch.mul(A_V, A_U))
+        A = torch.transpose(A, 2, 1)
+        A = F.softmax(A, dim=2)
+        m = torch.matmul(A, H)
+        Y = self.classifier(m)
+        return Y, A
+
+    def mc_inference(self, input_tensor, n=30, device='cuda'):
+        self.eval()
+        self.to(device)
+        input_tensor = input_tensor.to(device)
+
+        def enable_dropout(m):
+            if isinstance(m, torch.nn.Dropout):
+                m.train()
+
+        self.apply(enable_dropout)
+
+        predictions = []
+        with torch.no_grad():
+            for _ in range(n):
+                outputs, _ = self(input_tensor)  # Forward pass
+                outputs = F.sigmoid(outputs)  # Convert logits to probabilities
+                predictions.append(outputs)
+                torch.cuda.empty_cache()
+                gc.collect()
+
+        predictions = torch.stack(predictions)  # Shape: (n, batch_size, num_classes)
+
+        mean_prediction = predictions.mean(dim=0)  # Mean over MC samples
+        std_prediction = predictions.std(dim=0)    # Standard deviation over MC samples
+
+        return mean_prediction, std_prediction
