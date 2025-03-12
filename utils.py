@@ -1,7 +1,8 @@
 from pandas import DataFrame
 from torch.utils.data import DataLoader
 import pandas as pd
-from torchvision.transforms import v2 as T
+# from torchvision.transforms import v2 as T
+from torchvision import transforms as T
 from dataset import BreastCancerDataset
 import argparse
 
