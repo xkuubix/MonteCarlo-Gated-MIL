@@ -3,7 +3,8 @@
 import os
 from pydicom import dcmread
 import torch
-from torchvision.transforms import v2 as T
+# from torchvision.transforms import v2 as T
+from torchvision import transforms as T
 import torchvision.transforms.functional as TF
 from skimage import img_as_float32
 from image_patcher import ImagePatcher
@@ -81,17 +82,28 @@ class BreastCancerDataset(torch.utils.data.Dataset):
         return len(self.dicoms)
 
     def load_dcm_multimodal(self, idx):
-        dcm = dcmread(self.dicoms[idx][0])
-        img_CC = dcm.pixel_array
-        height, width = img_CC.shape
-        img_CC = img_CC/4095
-        img_CC = img_as_float32(img_CC)
+        CC_path = None
+        MLO_path = None
+        for i in range(len(self.dicoms[idx])):
+            if "CC" in self.dicoms[idx][i]:
+                CC_path = self.dicoms[idx][i]
+            if "ML" in self.dicoms[idx][i] or "MO" in self.dicoms[idx][i]:
+                MLO_path = self.dicoms[idx][i]
+        if CC_path is None or MLO_path is None:
+            print(self.dicoms[idx])
+            raise ValueError("CC or MLO not found")
+        dcm = dcmread(CC_path)
+        # img_CC = dcm.pixel_array
+        # img_CC = img_CC/4095
+        # img_CC = img_as_float32(img_CC)
+        img_CC = self.__normalize_dicom(dcm)
         img_CC = torch.from_numpy(img_CC).unsqueeze(0).repeat(3, 1, 1)
 
-        dcm = dcmread(self.dicoms[idx][1])
-        img_MLO = dcm.pixel_array
-        img_MLO = img_MLO/4095
-        img_MLO = img_as_float32(img_MLO)
+        dcm = dcmread(MLO_path)
+        # img_MLO = dcm.pixel_array
+        # img_MLO = img_MLO/4095
+        # img_MLO = img_as_float32(img_MLO)
+        img_MLO = self.__normalize_dicom(dcm)
         img_MLO = torch.from_numpy(img_MLO).unsqueeze(0).repeat(3, 1, 1)
 
         img = torch.cat((img_MLO, img_CC), dim=1)
@@ -99,10 +111,11 @@ class BreastCancerDataset(torch.utils.data.Dataset):
 
     def load_dcm_unimodal(self, idx, img_only=False):
         dcm = dcmread(self.dicoms[idx])
-        img = dcm.pixel_array
+        img = self.__normalize_dicom(dcm)
+        # img = dcm.pixel_array
         height, width = img.shape
-        img = img/4095
-        img = img_as_float32(img)
+        # img = img/4095
+        # img = img_as_float32(img)
         img = torch.from_numpy(img).unsqueeze(0).repeat(3, 1, 1)
         if img_only:
             return img
@@ -123,14 +136,22 @@ class BreastCancerDataset(torch.utils.data.Dataset):
                 # take 2 first rows (sorted) if 2 or more rows are present
                 if 'LCC' in patient['view'] and 'LMLO' in patient['view']:
                     # if patient['class'][0] in ['Malignant', 'Lymph_nodes']:
+                    flist = [f for f in patient['filename'] if 'L_C' in f or 'L_M' in f]
+                    if len(flist) != 2:
+                        print(f"Patient {patient['filename']} has invalid combination of L CC or MLO view")
+                        continue
+                    filenames_list.append(flist)
                     class_names_list.append(patient['class'][0])
-                    filenames_list.append(patient['filename'][0:2])
                     view_list.append('Left')
                 # take 2 last rows (sorted) if 2 or more rows are present
-                if 'RCC' in patient['view'] and 'RMLO' in patient['view']:
+                elif 'RCC' in patient['view'] and 'RMLO' in patient['view']:
                     # if patient['class'][-1] in ['Malignant', 'Lymph_nodes']:
+                    flist = [f for f in patient['filename'] if 'R_C' in f or 'R_M' in f]
+                    if len(flist) != 2:
+                        print(f"Patient {patient['filename']} has invalid combination of R CC or MLO view")
+                        continue
+                    filenames_list.append(flist)
                     class_names_list.append(patient['class'][-1])
-                    filenames_list.append(patient['filename'][-2:])
                     view_list.append('Rigth')
         else:
             for patient in patients:
@@ -165,3 +186,8 @@ class BreastCancerDataset(torch.utils.data.Dataset):
         '''
         return dcm.ImageLaterality
 
+    def __normalize_dicom(self, dcm):
+        """Normalize DICOM pixel values dynamically using BitsStored."""
+        bits_stored = dcm.BitsStored  # Extract actual bit depth
+        max_val = (2 ** bits_stored) - 1  # Compute max pixel value
+        return dcm.pixel_array / max_val  # Normalize
