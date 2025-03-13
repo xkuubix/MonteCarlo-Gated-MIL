@@ -6,7 +6,7 @@ import torch
 from model import GatedAttentionMIL
 import logging
 import utils
-from net_utils import train, validate, test, EarlyStopping
+from net_utils import train, train_gacc, validate, test, EarlyStopping
 
 #TODO
 # MCDO / MCBN + MCDO
@@ -29,6 +29,7 @@ if __name__ == "__main__":
 
     if config["neptune"]:
         run = neptune.init_run(project="ProjektMMG/MCDO")
+        run["sys/group_tags"].add(["no-mcdo"])
         run["config"] = config
     else:
         run = None
@@ -52,8 +53,11 @@ if __name__ == "__main__":
     early_stopping = EarlyStopping(patience=config['training_plan']['parameters']['patience'], nepune_run=run)
 
     for epoch in range(1, config['training_plan']['parameters']['epochs'] + 1):
-        train(model=model, dataloader=dataloaders['train'],
-                      criterion=criterion, optimizer=optimizer, device=device, neptune_run=run, epoch=epoch)
+        # train(model=model, dataloader=dataloaders['train'],
+        #       criterion=criterion, optimizer=optimizer, device=device, neptune_run=run, epoch=epoch)
+        train_gacc(model=model, dataloader=dataloaders['train'],
+                   criterion=criterion, optimizer=optimizer, device=device, neptune_run=run, epoch=epoch,
+                   accumulation_steps=config['training_plan']['parameters']['grad_acc_steps'])
         val_loss = validate(model=model, dataloader=dataloaders['val'],
                             criterion=criterion, device=device, neptune_run=run, epoch=epoch)
         if early_stopping(val_loss, model):

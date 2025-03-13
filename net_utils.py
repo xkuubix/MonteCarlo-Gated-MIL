@@ -30,6 +30,44 @@ def train(model, dataloader, criterion, optimizer, device, neptune_run, epoch):
     print(f"Epoch {epoch} - Train Loss: {epoch_loss:.4f}, Accuracy: {epoch_acc:.4f}")
 
 
+def train_gacc(model, dataloader, criterion, optimizer, device, neptune_run, epoch, accumulation_steps=8):
+    model.train()
+    running_loss = 0.0
+    correct = 0
+    total = 0
+
+    optimizer.zero_grad()  # Initialize gradients once at the beginning
+
+    for batch_idx, batch in enumerate(dataloader):
+        images, targets = batch['image'].to(device), batch['target']['label'].to(device)
+        
+        outputs, _ = model(images)
+        output = torch.sigmoid(outputs.squeeze(0))
+        loss = criterion(output, targets.unsqueeze(0))
+        loss = loss / accumulation_steps  # Normalize loss per accumulation step
+        
+        loss.backward()  # Accumulate gradients
+
+        if (batch_idx + 1) % accumulation_steps == 0 or (batch_idx + 1) == len(dataloader):
+            optimizer.step()
+            optimizer.zero_grad()  # Reset gradients after accumulation
+
+        running_loss += loss.item() * accumulation_steps  # Convert back to full loss scale
+        preds = (outputs.view(-1) > 0.5).float()
+        correct += (preds == targets).sum().item()
+        total += targets.size(0)
+
+    epoch_loss = running_loss / len(dataloader)
+    epoch_acc = correct / total
+    
+    if neptune_run is not None:
+        neptune_run["train/epoch_loss"].log(epoch_loss)
+        neptune_run["train/epoch_acc"].log(epoch_acc)
+    
+    print(f"Epoch {epoch} - Train Loss: {epoch_loss:.4f}, Accuracy: {epoch_acc:.4f}")
+
+
+
 def validate(model, dataloader, criterion, device, neptune_run, epoch):
     model.eval()
     running_loss = 0.0
