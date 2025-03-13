@@ -44,9 +44,11 @@ if __name__ == "__main__":
         raise ValueError("Criterion not supported")
     
     if config['training_plan']['optimizer'].lower() == 'adam':
-        optimizer = torch.optim.Adam(model.parameters(), lr=config['training_plan']['parameters']['lr'])
+        optimizer = torch.optim.Adam(model.parameters(), lr=config['training_plan']['parameters']['lr'],
+                                     weight_decay=config['training_plan']['parameters']['wd'])
     elif config['training_plan']['optimizer'].lower() == 'sgd':
-        optimizer = torch.optim.SGD(model.parameters(), lr=config['training_plan']['parameters']['lr'])
+        optimizer = torch.optim.SGD(model.parameters(), lr=config['training_plan']['parameters']['lr'],
+                                    weight_decay=config['training_plan']['parameters']['wd'])
     else:
         raise ValueError("Optimizer not supported")
   
