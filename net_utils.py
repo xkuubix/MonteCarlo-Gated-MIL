@@ -115,7 +115,7 @@ def test(model, dataloader, device, neptune_run):
             all_targets.extend(targets.cpu().numpy())
 
     test_acc = correct / total
-    report = classification_report(all_targets, all_preds)
+    report = classification_report(all_targets, all_preds, [0, 1], target_names=["Negative", "Positive"])
     if neptune_run is not None:
         neptune_run["test/accuracy"] = test_acc
         neptune_run["test/classification_report"] = report  # Logs the classification report to Neptune
