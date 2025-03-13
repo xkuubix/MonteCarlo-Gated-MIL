@@ -1,5 +1,6 @@
 import torch
 import copy
+from sklearn.metrics import classification_report
 
 
 def train(model, dataloader, criterion, optimizer, device, neptune_run, epoch):
@@ -55,6 +56,7 @@ def validate(model, dataloader, criterion, device, neptune_run, epoch):
     print(f"Epoch {epoch} - Val Loss: {epoch_loss:.4f}, Accuracy: {epoch_acc:.4f}")
     return epoch_loss
 
+
 def test(model, dataloader, device, neptune_run):
     model.eval()
     correct = 0
@@ -73,19 +75,20 @@ def test(model, dataloader, device, neptune_run):
             total += targets.size(0)
             all_preds.extend(preds.cpu().numpy())
             all_targets.extend(targets.cpu().numpy())
-    
+
     test_acc = correct / total
-    
+    report = classification_report(all_targets, all_preds)
     if neptune_run is not None:
-        neptune_run["test/accuracy"].log(test_acc)
-        neptune_run["test/predictions"].log(all_preds)
-        neptune_run["test/targets"].log(all_targets)
+        neptune_run["test/accuracy"] = test_acc
+        neptune_run["test/classification_report"] = report  # Logs the classification report to Neptune
+
     print(f"Test Accuracy: {test_acc:.4f}")
+    print("Classification Report:\n", report)
 
 class EarlyStopping:
     def __init__(self, patience=5, nepune_run=None):
         self.patience = patience
-        self.counter = 0
+        self.counter = patience
         self.best_loss = float('inf')
         self.best_model_state = None
         self.neptune_run = nepune_run
@@ -95,10 +98,10 @@ class EarlyStopping:
         
         if current_loss < self.best_loss:
             self.best_loss = current_loss
-            self.counter = 0
+            self.counter = self.patience
             copy_model = True
         else:
-            self.counter += 1
+            self.counter -= 1
 
         if self.neptune_run is not None:
             self.neptune_run["val/patience_counter"].log(self.counter)
@@ -106,7 +109,7 @@ class EarlyStopping:
         if copy_model:
             self.best_model_state = copy.deepcopy(model.state_dict())
 
-        return self.counter >= self.patience
+        return not self.counter
 
     def get_best_model_state(self):
         """Return the best model state dictionary."""
