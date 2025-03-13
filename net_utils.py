@@ -18,7 +18,7 @@ def train(model, dataloader, criterion, optimizer, device, neptune_run, epoch):
         loss.backward()
         optimizer.step()
         running_loss += loss.item()
-        preds = (outputs.view(-1) > 0.5).float()
+        preds = (output.view(-1) > 0.5).float()
         correct += (preds == targets).sum().item()
         total += targets.size(0)
     epoch_loss = running_loss / len(dataloader)
@@ -53,7 +53,7 @@ def train_gacc(model, dataloader, criterion, optimizer, device, neptune_run, epo
             optimizer.zero_grad()  # Reset gradients after accumulation
 
         running_loss += loss.item() * accumulation_steps  # Convert back to full loss scale
-        preds = (outputs.view(-1) > 0.5).float()
+        preds = (output.view(-1) > 0.5).float()
         correct += (preds == targets).sum().item()
         total += targets.size(0)
 
@@ -81,7 +81,7 @@ def validate(model, dataloader, criterion, device, neptune_run, epoch):
             output = torch.sigmoid(outputs.squeeze(0))
             loss = criterion(output, targets.unsqueeze(0))
             running_loss += loss.item()
-            preds = (outputs.view(-1) > 0.5).float()
+            preds = (output.view(-1) > 0.5).float()
             correct += (preds == targets).sum().item()
             total += targets.size(0)
             
