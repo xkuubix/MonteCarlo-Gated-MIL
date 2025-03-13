@@ -60,26 +60,29 @@ class ImagePatcher:
     
     
     def reconstruct_image_from_patches(self, patches, instances_ids, image_shape):
-            tiles = self.tiles
-            c, h, w = image_shape
-            # reconstructed_image = torch.zeros(c, h, w)
-            reconstructed_image = torch.ones(c, h, w)
-            patch_count = torch.ones(c, h, w) + 1e-5
+        tiles = self.tiles
+        c, h, w = image_shape
+        
+        # Initialize with zeros
+        reconstructed_image = torch.zeros(c, h, w, dtype=patches[0].dtype, device=patches[0].device)
+        patch_count = torch.zeros(c, h, w, dtype=torch.float, device=patches[0].device)
 
-            # for idx in instances_ids:
-            for item in range(len(instances_ids)):
-                h_min, w_min, dh, dw, _, _ = tiles[instances_ids[item]]
-                patch = patches[item]
+        for item in range(len(instances_ids)):
+            h_min, w_min, dh, dw, _, _ = tiles[instances_ids[item]]
+            patch = patches[item]
 
-                reconstructed_image[:, h_min:h_min + dh, w_min:w_min + dw] = patch
-                patch_count[:, h_min:h_min + dh, w_min:w_min + dw] += 1
+            # Accumulate patch contributions
+            reconstructed_image[:, h_min:h_min + dh, w_min:w_min + dw] += patch
+            patch_count[:, h_min:h_min + dh, w_min:w_min + dw] += 1
 
-            valid_area = patch_count > 1
-            reconstructed_image = torch.mul(reconstructed_image, valid_area)
-            # reconstructed_image /= patch_count
-            reconstructed_image = torch.clamp(reconstructed_image, min=0, max=1)  # Clamp to [0, 1] for valid image range
-            
-            return reconstructed_image    
+        # Avoid division by zero (set to 1 where count is 0)
+        patch_count = torch.where(patch_count == 0, torch.ones_like(patch_count), patch_count)
+
+        # Normalize by count to average overlapping regions
+        reconstructed_image /= patch_count
+
+        return reconstructed_image
+ 
 
     def _select_bag(self, new_img, tiles, sorted_tiles_idx, px_non_zero_pc):        
         
