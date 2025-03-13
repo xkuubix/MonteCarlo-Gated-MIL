@@ -52,7 +52,7 @@ if __name__ == "__main__":
     else:
         raise ValueError("Optimizer not supported")
   
-    early_stopping = EarlyStopping(patience=config['training_plan']['parameters']['patience'], nepune_run=run)
+    early_stopping = EarlyStopping(patience=config['training_plan']['parameters']['patience'], neptune_run=run)
 
     for epoch in range(1, config['training_plan']['parameters']['epochs'] + 1):
         # train(model=model, dataloader=dataloaders['train'],

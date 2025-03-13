@@ -124,12 +124,12 @@ def test(model, dataloader, device, neptune_run):
     print("Classification Report:\n", report)
 
 class EarlyStopping:
-    def __init__(self, patience=5, nepune_run=None):
+    def __init__(self, patience=5, neptune_run=None):
         self.patience = patience
         self.counter = patience
         self.best_loss = float('inf')
         self.best_model_state = None
-        self.neptune_run = nepune_run
+        self.neptune_run = neptune_run
 
     def __call__(self, current_loss, model):
         copy_model = False
