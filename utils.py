@@ -39,10 +39,10 @@ def get_dataloaders(config):
                                                    config['data']['fraction_train_rest'],
                                                    config['data']['fraction_val_test'],
                                                    seed=seed)
+
     train_transforms = T.Compose([T.RandomHorizontalFlip(),
-                                  T.RandomVerticalFlip(),
-                                  T.GaussianBlur(3),
-                                  ])
+                                  T.RandomVerticalFlip(),])
+    
     train_dataset = BreastCancerDataset(root=root,
                                         df=train_set,
                                         view=config['data']['view'],
