@@ -7,9 +7,16 @@ from model import GatedAttentionMIL
 import logging
 import utils
 from net_utils import train, train_gacc, validate, test, EarlyStopping
+import torch.nn as nn
 
 #TODO
 # MCDO / MCBN + MCDO
+
+def deactivate_batchnorm(net):
+    if isinstance(net, nn.BatchNorm2d):
+        net.track_running_stats = False
+        net.running_mean = None
+        net.running_var = None
 
 if __name__ == "__main__":
     logging.basicConfig(level=logging.INFO)
@@ -30,10 +37,12 @@ if __name__ == "__main__":
     if config["neptune"]:
         run = neptune.init_run(project="ProjektMMG/MCDO")
         run["sys/group_tags"].add(["no-mcdo"])
+        run["sys/group_tags"].add(["no-BN"])
         run["config"] = config
     else:
         run = None
     model = GatedAttentionMIL()
+    model.apply(deactivate_batchnorm)
     model.to(device)
     dataloaders = utils.get_dataloaders(config)
     if config['training_plan']['criterion'].lower() == 'bce':
@@ -72,6 +81,7 @@ if __name__ == "__main__":
         run["best_model_path"].log(model_name)
     model = GatedAttentionMIL()
     model.load_state_dict(torch.load(model_name))
+    model.apply(deactivate_batchnorm)
     model.to(device)
     test(model, dataloaders['test'], device, run)
     if run is not None:
