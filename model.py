@@ -30,8 +30,8 @@ class GatedAttentionMIL(nn.Module):
                 L=512,
                 D=128,
                 K=1,
-                feature_dropout=0.25,
-                attention_dropout=0.15):
+                feature_dropout=0.1,
+                attention_dropout=0.1):
 
         super().__init__()
         self.L = L  
