@@ -79,8 +79,8 @@ if __name__ == "__main__":
     if run is not None:
         run["best_model_path"].log(model_name)
     model = GatedAttentionMIL()
-    model.load_state_dict(torch.load(model_name))
     model.apply(deactivate_batchnorm)
+    model.load_state_dict(torch.load(model_name))
     model.to(device)
     test(model, dataloaders['test'], device, run)
     if run is not None:
