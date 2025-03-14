@@ -36,7 +36,6 @@ if __name__ == "__main__":
 
     if config["neptune"]:
         run = neptune.init_run(project="ProjektMMG/MCDO")
-        run["sys/group_tags"].add(["no-mcdo"])
         run["sys/group_tags"].add(["no-BN"])
         run["config"] = config
     else:
