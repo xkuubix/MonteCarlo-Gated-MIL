@@ -3,7 +3,6 @@ seed: 42
 device: 'cuda'
 
 model_path: '/users/scratch1/jbuler/models'
-model_path: '/media/dysk_a/jr_buler/mammografia/Zapisy/models'
 model: "r34"
 data:
   fraction_train_rest: 0.75
