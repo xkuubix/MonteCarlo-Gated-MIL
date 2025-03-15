@@ -26,6 +26,7 @@ class GatedAttentionMIL(nn.Module):
     def __init__(
                 self,
                 num_classes=1,
+                backbone='r18',
                 pretrained=True,
                 L=512,
                 D=128,
@@ -38,8 +39,15 @@ class GatedAttentionMIL(nn.Module):
         self.D = D
         self.K = K
         if pretrained:
-            weights = models.ResNet18_Weights.IMAGENET1K_V1
-            self.feature_extractor = models.resnet18(weights=weights)
+            if backbone == 'r18':
+                weights = models.ResNet18_Weights.IMAGENET1K_V1
+                self.feature_extractor = models.resnet18(weights=weights)
+            elif backbone == 'r34':
+                weights = models.ResNet34_Weights.IMAGENET1K_V1
+                self.feature_extractor = models.resnet34(weights=weights)
+            elif backbone == 'r50':
+                weights = models.ResNet50_Weights.IMAGENET1K_V1
+                self.feature_extractor = models.resnet50(weights=weights)
         else:
             self.feature_extractor = models.resnet18()
         self.num_features = self.feature_extractor.fc.in_features
