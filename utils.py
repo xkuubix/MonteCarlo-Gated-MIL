@@ -5,6 +5,8 @@ import pandas as pd
 from torchvision import transforms as T
 from dataset import BreastCancerDataset
 import argparse
+from collections import Counter
+
 
 def get_args_parser():
     default = '/home/jr_buler/mcdo/config.yml'
@@ -70,7 +72,10 @@ def get_dataloaders(config):
                                        patch_size=config['data']['patch_size'],
                                        overlap=config['data']['overlap_val_test'],
                                        empty_thresh=config['data']['empty_threshold'])
-    
+    print("Class counts per set:")
+    print(f"  Train set: {Counter(train_dataset.class_name)}")
+    print(f"  Validation set: {Counter(val_dataset.class_name)}")
+    print(f"  Test set: {Counter(test_dataset.class_name)}")
     train_loader = DataLoader(train_dataset,
                               batch_size=config['training_plan']['parameters']['batch_size'],
                               shuffle=True,
