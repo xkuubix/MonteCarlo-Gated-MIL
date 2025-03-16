@@ -63,7 +63,6 @@ class ImagePatcher:
         tiles = self.tiles
         c, h, w = image_shape
         
-        # Initialize with zeros
         reconstructed_image = torch.zeros(c, h, w, dtype=patches[0].dtype, device=patches[0].device)
         patch_count = torch.zeros(c, h, w, dtype=torch.float, device=patches[0].device)
 
@@ -71,18 +70,43 @@ class ImagePatcher:
             h_min, w_min, dh, dw, _, _ = tiles[instances_ids[item]]
             patch = patches[item]
 
-            # Accumulate patch contributions
             reconstructed_image[:, h_min:h_min + dh, w_min:w_min + dw] += patch
             patch_count[:, h_min:h_min + dh, w_min:w_min + dw] += 1
 
-        # Avoid division by zero (set to 1 where count is 0)
         patch_count = torch.where(patch_count == 0, torch.ones_like(patch_count), patch_count)
 
-        # Normalize by count to average overlapping regions
         reconstructed_image /= patch_count
 
         return reconstructed_image
  
+
+    def reconstruct_attention_map(self, attention_weights, instances_ids, image_shape):
+        tiles = self.tiles
+        n_passes, _, _, num_patches = attention_weights.shape  # n x 1 x 1 x num_patches
+        c, h, w = image_shape
+
+        reconstructed_attention = torch.zeros((n_passes, c, h, w), dtype=attention_weights.dtype, device=attention_weights.device)
+        patch_count = torch.zeros((n_passes, c, h, w), dtype=torch.float, device=attention_weights.device)
+
+        for item in range(num_patches):
+            h_min, w_min, dh, dw, _, _ = tiles[instances_ids[item]]
+
+            patch_attention = attention_weights[:, :, :, item]  # shape: (n_passes, 1, 1)
+            patch_attention = patch_attention.view(n_passes, 1, 1, 1)
+            patch_attention = patch_attention.expand(n_passes, c, dh, dw)
+
+            reconstructed_attention[:, :, h_min:h_min + dh, w_min:w_min + dw] += patch_attention
+            patch_count[:, :, h_min:h_min + dh, w_min:w_min + dw] += 1
+
+        patch_count = torch.where(patch_count == 0, torch.ones_like(patch_count), patch_count)
+
+        reconstructed_attention /= patch_count
+        max_values = reconstructed_attention.max(dim=-1)[0].max(dim=-1)[0].max(dim=-1)[0]
+        reconstructed_attention = reconstructed_attention / max_values.view(-1, 1, 1, 1)
+
+        return reconstructed_attention  # shape: (n_passes, c, h, w)
+
+
 
     def _select_bag(self, new_img, tiles, sorted_tiles_idx, px_non_zero_pc):        
         
