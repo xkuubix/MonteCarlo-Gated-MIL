@@ -95,18 +95,36 @@ class GatedAttentionMIL(nn.Module):
 
         self.apply(enable_dropout)
 
+        # Feature extraction only once
+        with torch.no_grad():
+            bs, num_instances, ch, w, h = input_tensor.shape
+            input_tensor = input_tensor.view(bs * num_instances, ch, w, h)
+            H = self.feature_extractor(input_tensor)
+            H = H.view(bs, num_instances, -1)
+
         predictions = []
+        attention_weights = []
+        
         with torch.no_grad():
             for _ in range(n):
-                outputs, _ = self(input_tensor)  # Forward pass
-                outputs = F.sigmoid(outputs)  # Convert logits to probabilities
+                H_dropout = self.feature_dropout(H)  # Apply dropout in each pass
+
+                A_V = self.attention_V(H_dropout)
+                A_U = self.attention_U(H_dropout)
+                A = self.attention_weights(torch.mul(A_V, A_U))
+                A = torch.transpose(A, 2, 1)
+                A = F.softmax(A, dim=2)
+
+                m = torch.matmul(A, H_dropout)
+                outputs = self.classifier(m)
+                outputs = F.sigmoid(outputs)
+
                 predictions.append(outputs)
+                attention_weights.append(A)
+
                 torch.cuda.empty_cache()
                 gc.collect()
 
         predictions = torch.stack(predictions)  # Shape: (n, batch_size, num_classes)
-
-        mean_prediction = predictions.mean(dim=0)  # Mean over MC samples
-        std_prediction = predictions.std(dim=0)    # Standard deviation over MC samples
-
-        return mean_prediction, std_prediction
+        attention_weights = torch.stack(attention_weights)  # Shape: (n, batch_size, num_instances, K)
+        return predictions, attention_weights
