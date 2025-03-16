@@ -83,7 +83,9 @@ if __name__ == "__main__":
     run = None
     dataloaders = utils.get_dataloaders(config)
 
-    model = GatedAttentionMIL(backbone=config['model'])
+    model = GatedAttentionMIL(backbone=config['model'],
+                              feature_dropout=config['feature_dropout'],
+                              attention_dropout=config['attention_dropout'])
     model.apply(deactivate_batchnorm)
     model_path = os.path.join(config['model_path'], config['model_id'])
     model.load_state_dict(torch.load(model_path))
