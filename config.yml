@@ -4,6 +4,8 @@ device: 'cuda'
 
 model_path: '/users/scratch1/jbuler/models'
 model: "r34"
+model_id: '645811453aae4719ae119bd32e3a8601'
+n: 1000
 data:
   fraction_train_rest: 0.75
   fraction_val_test: 0.5
