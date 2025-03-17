@@ -44,13 +44,13 @@ def get_dataloaders(config):
 
     train_transforms = T.Compose([T.RandomHorizontalFlip(),
                                   T.RandomVerticalFlip(),])
-    
     train_dataset = BreastCancerDataset(root=root,
                                         df=train_set,
                                         view=config['data']['view'],
                                         is_multimodal=config['data']['multimodal'],
                                         transforms=train_transforms,
                                         bag_size=config['data']['bag_size_train'],
+                                        img_size=[config['H'], config['W']],
                                         patch_size=config['data']['patch_size'],
                                         overlap=config['data']['overlap_train'],
                                         empty_thresh=config['data']['empty_threshold'])
@@ -60,6 +60,7 @@ def get_dataloaders(config):
                                       is_multimodal=config['data']['multimodal'],
                                       transforms=None,
                                       bag_size=config['data']['bag_size_val_test'],
+                                      img_size=[config['H'], config['W']],
                                       patch_size=config['data']['patch_size'],
                                       overlap=config['data']['overlap_val_test'],
                                       empty_thresh=config['data']['empty_threshold'])
@@ -69,6 +70,7 @@ def get_dataloaders(config):
                                        is_multimodal=config['data']['multimodal'],
                                        transforms=None,
                                        bag_size=config['data']['bag_size_val_test'],
+                                       img_size=[config['H'], config['W']],
                                        patch_size=config['data']['patch_size'],
                                        overlap=config['data']['overlap_val_test'],
                                        empty_thresh=config['data']['empty_threshold'])

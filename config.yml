@@ -16,6 +16,8 @@ data:
   
   view: ['CC', 'MLO']
   size: [7036, 2800]
+  H: 7036
+  W: 2800
   # size: [3518, 1400]
   # size: [4588, 1914] # CMMD[2294x1914] [4588, 1914] [2294, 957]
   multimodal: True
