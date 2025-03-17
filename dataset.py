@@ -22,10 +22,7 @@ class BreastCancerDataset(torch.utils.data.Dataset):
         self.df = df
         self.multimodal = is_multimodal
         logger.info(f"Multimodal: {self.multimodal}")
-        if self.multimodal:
-            self.img_size = [7036, 2800]
-        else:
-            self.img_size = img_size
+        self.img_size = img_size
         logger.info(f"Image size: {self.img_size}")
         self.views, self.dicoms, self.class_name = self.__select_view()
         self.transforms = transforms
