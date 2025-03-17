@@ -96,8 +96,12 @@ if __name__ == "__main__":
     for item in dataloaders['test']:
         images, targets = item['image'].to(device), item['target']['label']
         ys, As = model.mc_inference(input_tensor=images, n=config['n'], device=device)
-        att_maps = patcher.reconstruct_attention_map(As.cpu(), item['metadata']['tiles_indices'].squeeze(), [1, 7036//2, 2800//2])
-        image = patcher.reconstruct_image_from_patches(images.squeeze().cpu(), item['metadata']['tiles_indices'].squeeze(), [3, 7036//2, 2800//2])
+        att_maps = patcher.reconstruct_attention_map(As.cpu(),
+                                                     item['metadata']['tiles_indices'].squeeze(),
+                                                     [1, config['data']['H'], config['data']['W']])
+        image = patcher.reconstruct_image_from_patches(images.squeeze().cpu(),
+                                                       item['metadata']['tiles_indices'].squeeze(),
+                                                       [3, config['data']['H'], config['data']['W']])
 
         mean_attention = att_maps.mean(dim=0).squeeze()  # Shape: (H, W)
         std_attention = att_maps.std(dim=0).squeeze()    # Shape: (H, W)
