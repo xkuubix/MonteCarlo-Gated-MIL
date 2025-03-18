@@ -48,7 +48,8 @@ class BreastCancerDataset(torch.utils.data.Dataset):
         target["label"] = torch.tensor(1. if self.class_name[idx] in ['Malignant', 'Lymph_nodes'] else 0.)
         target["class"] = self.class_name[idx]
         
-        meda_data = {
+        meta_data = {
+            "index": idx,
             "view": self.views[idx],
             "file": self.dicoms[idx],
             "patient_id": dcm.PatientID,
@@ -58,7 +59,7 @@ class BreastCancerDataset(torch.utils.data.Dataset):
             "img_w": width
         }
 
-        if meda_data["laterality"] == 'R':
+        if meta_data["laterality"] == 'R':
             t = T.RandomHorizontalFlip(p=1.0)
             img = t(img)
         # translation -px (white strips near image border)
@@ -68,10 +69,10 @@ class BreastCancerDataset(torch.utils.data.Dataset):
             instances, instances_ids, instances_coords = self.patcher.convert_img_to_bag(img)
             if self.transforms:
                 instances = torch.stack([self.transforms(image) for image in instances]) 
-            data = {'image': instances, 'target': target, 'metadata': meda_data}
+            data = {'image': instances, 'target': target, 'metadata': meta_data}
             data['metadata']['tiles_indices'] = instances_ids
         else:
-            data = {'image': img, 'target': target, 'metadata': meda_data}
+            data = {'image': img, 'target': target, 'metadata': meta_data}
         
         return data
 
