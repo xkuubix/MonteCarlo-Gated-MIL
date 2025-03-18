@@ -44,7 +44,7 @@ class BreastCancerDataset(torch.utils.data.Dataset):
                 img = t(img)
 
         target = {}
-        target["label"] = torch.tensor(1. if self.class_name[idx] in ['Malignant', 'Lymph_nodes'] else 0.)
+        target["label"] = torch.tensor(1 if self.class_name[idx] in ['Malignant', 'Lymph_nodes'] else 0)
         target["class"] = self.class_name[idx]
         
         meta_data = {

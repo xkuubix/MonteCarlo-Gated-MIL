@@ -36,24 +36,25 @@ def train_gacc(model, dataloader, criterion, optimizer, device, neptune_run, epo
     correct = 0
     total = 0
 
-    optimizer.zero_grad()  # Initialize gradients once at the beginning
+    optimizer.zero_grad()
 
     for batch_idx, batch in enumerate(dataloader):
         images, targets = batch['image'].to(device), batch['target']['label'].to(device)
         
-        outputs, _ = model(images)
-        output = torch.sigmoid(outputs.squeeze(0))
-        loss = criterion(output, targets.unsqueeze(0))
-        loss = loss / accumulation_steps  # Normalize loss per accumulation step
+        output, _ = model(images)
+        # output = torch.sigmoid(outputs.squeeze(0))
+        loss = criterion(output, targets)
+        loss = loss / accumulation_steps
         
-        loss.backward()  # Accumulate gradients
+        loss.backward()
 
         if (batch_idx + 1) % accumulation_steps == 0 or (batch_idx + 1) == len(dataloader):
             optimizer.step()
-            optimizer.zero_grad()  # Reset gradients after accumulation
+            optimizer.zero_grad()
 
-        running_loss += loss.item() * accumulation_steps  # Convert back to full loss scale
-        preds = (output.view(-1) > 0.5).float()
+        running_loss += loss.item() * accumulation_steps
+        # preds = (output.view(-1) > 0.5).float()
+        preds = output.argmax(dim=1)
         correct += (preds == targets).sum().item()
         total += targets.size(0)
 
@@ -77,11 +78,12 @@ def validate(model, dataloader, criterion, device, neptune_run, epoch):
     with torch.no_grad():
         for batch in dataloader:
             images, targets = batch['image'].to(device), batch['target']['label'].to(device)
-            outputs, _ = model(images)
-            output = torch.sigmoid(outputs.squeeze(0))
-            loss = criterion(output, targets.unsqueeze(0))
+            output, _ = model(images)
+            # output = torch.sigmoid(outputs.squeeze(0))
+            loss = criterion(output, targets)
             running_loss += loss.item()
-            preds = (output.view(-1) > 0.5).float()
+            # preds = (output.view(-1) > 0.5).float()
+            preds = output.argmax(dim=1)
             correct += (preds == targets).sum().item()
             total += targets.size(0)
             
@@ -105,10 +107,10 @@ def test(model, dataloader, device, neptune_run):
     with torch.no_grad():
         for batch in dataloader:
             images, targets = batch['image'].to(device), batch['target']['label'].to(device)
-            outputs, _ = model(images)
-            output = torch.sigmoid(outputs.squeeze(0))
-            preds = (output.view(-1) > 0.5).float()
-            
+            output, _ = model(images)
+            # output = torch.sigmoid(outputs.squeeze(0))
+            preds = output.argmax(dim=1)
+            # preds = (output.view(-1) > 0.5).float()
             correct += (preds == targets).sum().item()
             total += targets.size(0)
             all_preds.extend(preds.cpu().numpy())
