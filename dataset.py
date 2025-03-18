@@ -42,7 +42,6 @@ class BreastCancerDataset(torch.utils.data.Dataset):
         if (height != self.img_size[0]) and (width != self.img_size[1]):
                 t = T.Resize((self.img_size[0], self.img_size[1]), antialias=True)
                 img = t(img)
-        # img = img/torch.max(img)
 
         target = {}
         target["label"] = torch.tensor(1. if self.class_name[idx] in ['Malignant', 'Lymph_nodes'] else 0.)
@@ -91,16 +90,10 @@ class BreastCancerDataset(torch.utils.data.Dataset):
             print(self.dicoms[idx])
             raise ValueError("CC or MLO not found")
         dcm = dcmread(CC_path)
-        # img_CC = dcm.pixel_array
-        # img_CC = img_CC/4095
-        # img_CC = img_as_float32(img_CC)
         img_CC = self.__normalize_dicom(dcm)
         img_CC = torch.from_numpy(img_CC).unsqueeze(0).repeat(3, 1, 1)
 
         dcm = dcmread(MLO_path)
-        # img_MLO = dcm.pixel_array
-        # img_MLO = img_MLO/4095
-        # img_MLO = img_as_float32(img_MLO)
         img_MLO = self.__normalize_dicom(dcm)
         img_MLO = torch.from_numpy(img_MLO).unsqueeze(0).repeat(3, 1, 1)
 
@@ -110,10 +103,7 @@ class BreastCancerDataset(torch.utils.data.Dataset):
     def load_dcm_unimodal(self, idx, img_only=False):
         dcm = dcmread(self.dicoms[idx])
         img = self.__normalize_dicom(dcm)
-        # img = dcm.pixel_array
         height, width = img.shape
-        # img = img/4095
-        # img = img_as_float32(img)
         img = torch.from_numpy(img).unsqueeze(0).repeat(3, 1, 1)
         if img_only:
             return img
