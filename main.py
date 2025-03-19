@@ -40,9 +40,12 @@ if __name__ == "__main__":
         run["config"] = config
     else:
         run = None
-    model = MultiHeadGatedAttentionMIL(backbone=config['model'],
-                                       feature_dropout=config['feature_dropout'],
-                                       attention_dropout=config['attention_dropout'])
+    model = MultiHeadGatedAttentionMIL(
+        backbone=config['model'],
+        feature_dropout=config['feature_dropout'],
+        attention_dropout=config['attention_dropout'],
+        shared_attention=config['shared_att']
+        )
     model.apply(deactivate_batchnorm)
     model.to(device)
     dataloaders = utils.get_dataloaders(config)
@@ -80,9 +83,12 @@ if __name__ == "__main__":
     torch.save(early_stopping.get_best_model_state(), model_name)
     if run is not None:
         run["best_model_path"].log(model_name)
-    model = MultiHeadGatedAttentionMIL(backbone=config['model'],
-                                       feature_dropout=config['feature_dropout'],
-                                       attention_dropout=config['attention_dropout'])
+    model = MultiHeadGatedAttentionMIL(
+        backbone=config['model'],
+        feature_dropout=config['feature_dropout'],
+        attention_dropout=config['attention_dropout'],
+        shared_attention=config['shared_att']
+        )
     model.apply(deactivate_batchnorm)
     model.load_state_dict(torch.load(model_name))
     model.to(device)
