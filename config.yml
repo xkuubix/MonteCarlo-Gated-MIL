@@ -3,11 +3,14 @@ seed: 42
 device: 'cuda'
 
 model_path: '/users/scratch1/jbuler/models'
-model: "r34"
-model_id: '645811453aae4719ae119bd32e3a8601'
-n: 1000
+model: "r18"
+model_id: 'fedafc44b6bc4166b33315d704b1b7ba'
+shared_att: False
+
+n: 50
 feature_dropout: 0.1
 attention_dropout: 0.1
+
 data:
   fraction_train_rest: 0.75
   fraction_val_test: 0.5
@@ -18,33 +21,27 @@ data:
   size: [7036, 2800]
   H: 7036
   W: 2800
-  # size: [3518, 1400]
-  # size: [4588, 1914] # CMMD[2294x1914] [4588, 1914] [2294, 957]
   multimodal: True
-
-  # class_names: ['No metastasis', 'ALNMetastasis']
-  # class_names: ['Malignant', 'Lymph_nodes']
-  # class_names: ['Normal', 'Benign', 'Malignant', 'Lymph_nodes']
   class_names: ['No cancer', 'Cancer']
-  #['Normal', 'Benign', 'Malignant', 'Lymph_nodes'] bcds zmienic 0.1. na 0123
-  patch_size: 128
+  
+  patch_size: 224
   bag_size_train: -1
   empty_threshold: 0.75
   bag_size_val_test: -1
   overlap_train: 0.5
-  overlap_val_test: 0.5
+  overlap_val_test: 0.75
 
 training_plan:
   parameters:
     batch_size: 1
-    num_workers: 0
-    lr: 0.0005
+    num_workers: 8
+    lr: 0.001
     wd: 0.001
     epochs: 1000
-    patience: 100
-    grad_acc_steps: 8
+    patience: 50
+    grad_acc_steps: 2
 
-  criterion: 'bce'
+  criterion: 'ce'
   optimizer: 'sgd'
 
   scheduler:
