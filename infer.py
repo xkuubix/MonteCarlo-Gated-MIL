@@ -166,10 +166,12 @@ if __name__ == "__main__":
     torch.cuda.manual_seed(seed)
     run = None
     dataloaders = utils.get_dataloaders(config)
-
-    model = GatedAttentionMIL(backbone=config['model'],
-                              feature_dropout=config['feature_dropout'],
-                              attention_dropout=config['attention_dropout'])
+    model = MultiHeadGatedAttentionMIL(
+        backbone=config['model'],
+        feature_dropout=config['feature_dropout'],
+        attention_dropout=config['attention_dropout'],
+        shared_attention=config['shared_att']
+        )
     model.apply(deactivate_batchnorm)
     model_path = os.path.join(config['model_path'], config['model_id'])
     model.load_state_dict(torch.load(model_path))
@@ -190,9 +192,12 @@ if __name__ == "__main__":
     for item in dataloaders['test']:
         images, targets = item['image'].to(device), item['target']['label']
         ys, As = model.mc_inference(input_tensor=images, n=config['n'], device=device)
-        att_maps = patcher.reconstruct_attention_map(As.cpu(),
-                                                     item['metadata']['tiles_indices'].squeeze(),
-                                                     [1, config['data']['H'], config['data']['W']])
+        probs = torch.nn.functional.softmax(ys, dim=-1)
+
+        attention_maps = patcher.reconstruct_attention_map(
+            As.cpu(),
+            item['metadata']['tiles_indices'].squeeze(),
+            [1, config['data']['H'], config['data']['W']])
         os.chdir(os.path.join(dataloaders['test'].dataset.root,
                               dataloaders['test'].dataset.class_name[item['metadata']['index']]))
         if config['data']['multimodal']:
@@ -207,11 +212,22 @@ if __name__ == "__main__":
         #                                                item['metadata']['tiles_indices'].squeeze(),
         #                                                [3, config['data']['H'], config['data']['W']])
 
-        mean_attention = att_maps.mean(dim=0).squeeze()  # Shape: (H, W)
-        std_attention = att_maps.std(dim=0).squeeze()    # Shape: (H, W)
+        positive_attention_map = attention_maps[:, 1, :, :, :]  # shape: (n_passes, C, H, W)
+        negative_attention_map = attention_maps[:, 0, :, :, :]  # shape: (n_passes, C, H, W)
+
+        
+        mean_positive_attention = positive_attention_map.mean(dim=0).squeeze()  # Shape: (H, W)
+        mean_negative_attention = negative_attention_map.mean(dim=0).squeeze()  # Shape: (H, W)
+
         i += 1
         save_path = os.path.join(folder_path, "".join(str(i)) + "_" + item['metadata']['patient_id'][0])
-        plot_attention_and_density(image, mean_attention, std_attention, ys, item, save_path)
+        
+        plot_attention_and_density(image,
+                                   mean_positive_attention,
+                                   mean_negative_attention,
+                                   probs,
+                                   item,
+                                   save_path)
         print(f"done: {i}/{len(dataloaders['test'])}")
         # if i == 40:
         #     break
