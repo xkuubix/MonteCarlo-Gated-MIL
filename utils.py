@@ -6,7 +6,8 @@ from torchvision import transforms as T
 from dataset import BreastCancerDataset
 import argparse
 from collections import Counter
-
+import torch, random
+import numpy as np
 
 def get_args_parser():
     default = '/users/project1/pt01190/mmg/MonteCarlo-Gated-MIL/config.yml'
@@ -84,18 +85,35 @@ def get_dataloaders(config):
     print(f"  Train set: {Counter(train_dataset.class_name)}")
     print(f"  Validation set: {Counter(val_dataset.class_name)}")
     print(f"  Test set: {Counter(test_dataset.class_name)}")
+    def seed_worker(worker_id):
+        worker_seed = torch.initial_seed() % 2**32
+        np.random.seed(worker_seed)
+        random.seed(worker_seed)
+
+    g = torch.Generator()
+    g.manual_seed(config['seed'])
+
     train_loader = DataLoader(train_dataset,
                               batch_size=config['training_plan']['parameters']['batch_size'],
                               shuffle=True,
-                              num_workers=config['training_plan']['parameters']['num_workers'])
+                              num_workers=config['training_plan']['parameters']['num_workers'],
+                              worker_init_fn=seed_worker,
+                              generator=g
+                              )
     val_loader = DataLoader(val_dataset,
                             batch_size=config['training_plan']['parameters']['batch_size'],
                             shuffle=False,
-                            num_workers=config['training_plan']['parameters']['num_workers'])
+                            num_workers=config['training_plan']['parameters']['num_workers'],
+                            worker_init_fn=seed_worker,
+                            generator=g
+                            )
     test_loader = DataLoader(test_dataset,
                              batch_size=config['training_plan']['parameters']['batch_size'],
                              shuffle=False,
-                             num_workers=config['training_plan']['parameters']['num_workers'])
+                             num_workers=config['training_plan']['parameters']['num_workers'],
+                            worker_init_fn=seed_worker,
+                            generator=g
+                            )
     dataloaders = {'train': train_loader,
                    'val': val_loader,
                    'test': test_loader}
