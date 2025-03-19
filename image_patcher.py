@@ -81,30 +81,34 @@ class ImagePatcher:
  
 
     def reconstruct_attention_map(self, attention_weights, instances_ids, image_shape):
+       
         tiles = self.tiles
-        n_passes, _, _, num_patches = attention_weights.shape  # n x 1 x 1 x num_patches
+        n_passes, _, n_classes, n_patches = attention_weights.shape  # (n_passes, batch_size, n_classes, n_patches)
         c, h, w = image_shape
 
-        reconstructed_attention = torch.zeros((n_passes, c, h, w), dtype=attention_weights.dtype, device=attention_weights.device)
-        patch_count = torch.zeros((n_passes, c, h, w), dtype=torch.float, device=attention_weights.device)
+        reconstructed_attention = torch.zeros((n_passes, n_classes, c, h, w), dtype=attention_weights.dtype, device=attention_weights.device)
+        patch_count = torch.zeros((n_passes, n_classes, c, h, w), dtype=torch.uint8, device=attention_weights.device)
 
-        for item in range(num_patches):
+        for item in range(n_patches):
             h_min, w_min, dh, dw, _, _ = tiles[instances_ids[item]]
 
-            patch_attention = attention_weights[:, :, :, item]  # shape: (n_passes, 1, 1)
-            patch_attention = patch_attention.view(n_passes, 1, 1, 1)
-            patch_attention = patch_attention.expand(n_passes, c, dh, dw)
+            patch_attention = attention_weights[:, :, :, item]  # shape: (n_passes, batch_size, n_classes)
+            patch_attention = patch_attention.view(n_passes, n_classes, 1, 1, 1)  # Expand to match spatial dims
+            patch_attention = patch_attention.expand(n_passes, n_classes, c, dh, dw)
 
-            reconstructed_attention[:, :, h_min:h_min + dh, w_min:w_min + dw] += patch_attention
-            patch_count[:, :, h_min:h_min + dh, w_min:w_min + dw] += 1
+            reconstructed_attention[:, :, :, h_min:h_min + dh, w_min:w_min + dw] += patch_attention
+            patch_count[:, :, :, h_min:h_min + dh, w_min:w_min + dw] += 1
 
+        # avoiding division by zero
         patch_count = torch.where(patch_count == 0, torch.ones_like(patch_count), patch_count)
 
+        # normalizing attention maps??
         reconstructed_attention /= patch_count
         max_values = reconstructed_attention.max(dim=-1)[0].max(dim=-1)[0].max(dim=-1)[0]
-        reconstructed_attention = reconstructed_attention / max_values.view(-1, 1, 1, 1)
+        reconstructed_attention = reconstructed_attention / max_values.view(n_passes, n_classes, 1, 1, 1)
 
-        return reconstructed_attention  # shape: (n_passes, c, h, w)
+        return reconstructed_attention  # shape: (n_passes, n_classes, c, h, w)
+
 
 
 
