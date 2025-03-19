@@ -2,7 +2,7 @@
 import yaml, os, shutil
 import numpy as np
 import torch
-from model import GatedAttentionMIL
+from model import MultiHeadGatedAttentionMIL
 import logging
 import utils
 from net_utils import test
@@ -12,79 +12,130 @@ import seaborn as sns
 from torchvision import transforms as T
 
 
-def plot_attention_and_density(image, mean_attention, std_attention, ys, item, save_path=None):
-    """
-    Generates a multi-panel plot with:
-    - Reconstructed image
-    - Attention map (average)
-    - Attention uncertainty (STD)
-    - KDE plot of MC Dropout predictions with clinical enhancements
-
-    Parameters:
-    - image: The reconstructed image (torch tensor)
-    - mean_attention: The mean attention map (torch tensor)
-    - std_attention: The std attention map (torch tensor)
-    - ys: MC Dropout prediction probabilities (torch tensor)
-    - item: Contains target class and label information (dict)
-    - save_path: Path to save the figure (optional)
-    """
+def plot_attention_and_density(image, pos_att, neg_att, probs, item, save_path=None):
     fig = plt.figure(figsize=(10, 8))
-    gs = fig.add_gridspec(2, 3, height_ratios=[1, 0.2])
+    gs = fig.add_gridspec(2, 3, height_ratios=[1, 0.3])
+
+
+    neg_att_scaling_factor = probs[:,:,0].mean(dim=(0,1)).item()
+    pos_att_scaling_factor = probs[:,:,1].mean(dim=(0,1)).item()
+
+
 
     ax1 = fig.add_subplot(gs[0, 0])
     ax1.imshow(image.permute(1, 2, 0))
     ax1.set_title("Input Image")
     ax1.axis("off")
-
+    
     ax2 = fig.add_subplot(gs[0, 1])
-    ax2.imshow(mean_attention, cmap="gray")
-    ax2.set_title("Average Attention Map")
+    ax2.imshow(neg_att * neg_att_scaling_factor, cmap="Blues", vmin=0., vmax=1.)
+    ax2.set_title("Normal Attention")
     ax2.axis("off")
 
     ax3 = fig.add_subplot(gs[0, 2])
-    ax3.imshow(std_attention, cmap="gray")
-    ax3.set_title("Attention Uncertainty (STD)")
+    ax3.imshow(pos_att * pos_att_scaling_factor, cmap="Reds", vmin=0., vmax=1.)
+    ax3.set_title("Cancer Attention")
     ax3.axis("off")
 
     ax4 = fig.add_subplot(gs[1, :])
-    mc_preds = ys.squeeze().cpu().numpy()
 
-    sns.kdeplot(mc_preds, fill=True, color='b', alpha=0.6, ax=ax4)
+    mc_preds = probs.squeeze().cpu().numpy()
 
-    ax4.axvline(0.5, color='r', linestyle='--', lw=2, label="Threshold (0.5)")
+    positive_probs = mc_preds[:, 1]
+    negative_probs = mc_preds[:, 0]
 
-    ax4.set_xlim(0, 1)
-    ax4.set_xticks(np.arange(0.0, 1.1, 0.1))
-    ax4.set_xlabel("Predicted Probability")
-    ax4.set_ylabel("Density")
-    ax4.set_title(f"MC Dropout Prediction Density; GT: {item['target']['class'][0]} ({int(item['target']['label'][0].item())})")
+    sorted_indices = np.argsort(positive_probs)
+    positive_probs_sorted = positive_probs[sorted_indices]
+    negative_probs_sorted = negative_probs[sorted_indices]
 
-    mean_pred = np.mean(mc_preds)
-    median_pred = np.median(mc_preds)
-    iqr_pred = np.percentile(mc_preds, 75) - np.percentile(mc_preds, 25)
-    min_pred, max_pred = np.min(mc_preds), np.max(mc_preds)
+    bars = np.arange(len(positive_probs_sorted))  # X-axis positions
+    bar_width = 1.0
+
+    ax4.bar(bars,
+            negative_probs_sorted,
+            bottom=positive_probs_sorted,
+            color="royalblue",
+            label="Negative (Normal)",
+            width=bar_width,
+            )
+    ax4.bar(bars,
+            positive_probs_sorted,
+            color="orangered",
+            label="Positive (Cancer)",
+            width=bar_width,
+            edgecolor='black',
+            linewidth=0.5
+            )
+
+    ax4.axhline(
+        0.5,
+        color="gold",
+        linestyle="-",
+        lw=1.5,
+        label="Threshold (p=0.5)"
+        )
+
+    x_min = bars[0] - 0.5 * bar_width
+    x_max = bars[-1] + 0.5 * bar_width
+    ax4.set_xlim(x_min, x_max)
+
+    x_middle = (x_min + x_max) / 2
+    ax4.axvline(
+        x=x_middle,
+        color="gold",
+        linestyle="--",
+        lw=1.5,
+        label="n/2"
+        )
+
+    ax4.set_xlim(bars[0] - 0.5 * bar_width, bars[-1] + 0.5 * bar_width)
+    ax4.set_xlabel(f"n={len(positive_probs_sorted)}")
+
+    ax4.set_ylim(0, 1)
+    ax4.set_ylabel("Probability", fontsize=10)
+    ax4.tick_params(
+        axis='x',
+        which='both',
+        bottom=False,
+        top=False,
+        labelbottom=False
+        )
+    mean_pred = np.mean(positive_probs)
+    median_pred = np.median(positive_probs)
+    std_pred = np.std(positive_probs)
+    iqr_pred = np.percentile(positive_probs, 75) - np.percentile(positive_probs, 25)
+    min_pred, max_pred = np.min(positive_probs), np.max(positive_probs)
 
     stats_text = (
-        f"Mean: {mean_pred:.2f}     "
-        f"Median: {median_pred:.2f}     "
-        f"IQR: {iqr_pred:.2f}     "
-        f"Min: {min_pred:.2f}     Max: {max_pred:.2f}"
+        f"Probability of Cancer:    "
+        f"Mean: {mean_pred:.2f}    "
+        f"Std: {std_pred:.2f}    "
+        f"Median: {median_pred:.2f}    "
+        f"IQR: {iqr_pred:.2f}    "
+        f"Min: {min_pred:.2f}    Max: {max_pred:.2f}"
     )
-    ax4.set_ylim(0, ax4.get_ylim()[1] * 1.25)
+
     props = dict(boxstyle="round,pad=0.3", edgecolor="black", facecolor="white")
-    x_center = (ax4.get_xlim()[0] + ax4.get_xlim()[1]) / 2
-    ax4.text(x_center, ax4.get_ylim()[1] * 0.95, stats_text, fontsize=10, 
-             verticalalignment='top', horizontalalignment='center', bbox=props)
+    ax4.text(0.5, 0.95, stats_text, fontsize=9, 
+            verticalalignment='top', horizontalalignment='left', bbox=props)
 
-
-    ax4.text(0.02, ax4.get_ylim()[1] * 1.05, "Normal", color="black", fontsize=12, fontweight='bold')
-    ax4.text(0.9, ax4.get_ylim()[1] * 1.05, "Cancer", color="black", fontsize=12, fontweight='bold')
-
-    ax4.grid(axis='x', linestyle=":", alpha=0.4)
+    ax4.legend(
+        loc="upper center",
+        bbox_to_anchor=(0.5, 1.25),
+        ncol=4,
+        fontsize=10,
+        frameon=False
+        )
+    title = (
+        f"Positive and Negative Attentions for {len(positive_probs_sorted)} Monte Carlo Dropout Samples \n"
+        f"Ground Truth: {item['target']['class'][0]}"
+    )
+    fig.suptitle(title)
+    
     plt.tight_layout()
 
     if save_path:
-        plt.savefig(save_path, format="pdf", bbox_inches="tight", dpi=2_000)
+        plt.savefig(save_path, format="pdf", bbox_inches="tight", dpi=1_000)
     plt.show()
 
 
