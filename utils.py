@@ -9,7 +9,7 @@ from collections import Counter
 
 
 def get_args_parser():
-    default = '/home/jr_buler/mcdo/config.yml'
+    default = '/users/project1/pt01190/mmg/MonteCarlo-Gated-MIL/config.yml'
     help = '''path to .yml config file
     specyfying datasets/training params'''
 
@@ -43,7 +43,13 @@ def get_dataloaders(config):
                                                    seed=seed)
 
     train_transforms = T.Compose([T.RandomHorizontalFlip(),
-                                  T.RandomVerticalFlip(),])
+                                  T.RandomVerticalFlip(),
+                                  T.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225]),
+                                  ])
+    val_test_transforms = T.Compose([
+                                  T.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225]),
+                                  ])
+    # val_test_transforms = None
     train_dataset = BreastCancerDataset(root=root,
                                         df=train_set,
                                         view=config['data']['view'],
@@ -58,7 +64,7 @@ def get_dataloaders(config):
                                       df=val_set,
                                       view=config['data']['view'],
                                       is_multimodal=config['data']['multimodal'],
-                                      transforms=None,
+                                      transforms=val_test_transforms,
                                       bag_size=config['data']['bag_size_val_test'],
                                       img_size=[config['data']['H'], config['data']['W']],
                                       patch_size=config['data']['patch_size'],
@@ -68,7 +74,7 @@ def get_dataloaders(config):
                                        df=test_set,
                                        view=config['data']['view'],
                                        is_multimodal=config['data']['multimodal'],
-                                       transforms=None,
+                                       transforms=val_test_transforms,
                                        bag_size=config['data']['bag_size_val_test'],
                                        img_size=[config['data']['H'], config['data']['W']],
                                        patch_size=config['data']['patch_size'],
