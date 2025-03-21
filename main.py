@@ -1,6 +1,7 @@
 # %%
 import yaml, uuid, os
 import numpy as np
+import random
 import neptune
 import torch
 from model import MultiHeadGatedAttentionMIL
@@ -29,10 +30,16 @@ if __name__ == "__main__":
     selected_device = config['device']
     device = torch.device(selected_device if torch.cuda.is_available() else "cpu")
     
-    seed = config['seed']
-    np.random.seed(seed)
-    torch.manual_seed(seed)
-    torch.cuda.manual_seed(seed)
+    SEED = config['seed']
+    os.environ["CUBLAS_WORKSPACE_CONFIG"] = ":4096:8"  # or ":16:8"
+    random.seed(SEED)
+    np.random.seed(SEED)
+    torch.manual_seed(SEED)
+    torch.cuda.manual_seed(SEED)
+    torch.cuda.manual_seed_all(SEED)
+    torch.backends.cudnn.benchmark = False
+    torch.backends.cudnn.deterministic = True
+    torch.use_deterministic_algorithms(True)
 
     if config["neptune"]:
         run = neptune.init_run(project="ProjektMMG/MCDO")
