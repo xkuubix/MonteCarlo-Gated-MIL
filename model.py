@@ -144,6 +144,7 @@ class MultiHeadGatedAttentionMIL(nn.Module):
             shared_attention=True):
         
         super().__init__()
+        # TODO: adjust L for resnet50
         self.L = L
         self.D = D
         self.num_classes = num_classes
