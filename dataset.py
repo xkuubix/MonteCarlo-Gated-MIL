@@ -9,8 +9,8 @@ import torchvision.transforms.functional as TF
 from skimage import img_as_float32
 from image_patcher import ImagePatcher
 import logging
+logging.basicConfig(level=logging.WARNING)
 
-logger = logging.getLogger(__name__)
 #%%
 class BreastCancerDataset(torch.utils.data.Dataset):
     def __init__(self, root: os.PathLike, df, view: list, transforms,
@@ -21,9 +21,10 @@ class BreastCancerDataset(torch.utils.data.Dataset):
         self.root = root
         self.df = df
         self.multimodal = is_multimodal
-        logger.info(f"Multimodal: {self.multimodal}")
+        self.logger = logging.getLogger(__name__)
+        self.logger.info(f"Multimodal: {self.multimodal}")
         self.img_size = img_size
-        logger.info(f"Image size: {self.img_size}")
+        self.logger.info(f"Image size: {self.img_size}")
         self.views, self.dicoms, self.class_name = self.__select_view()
         self.transforms = transforms
         self.convert_to_bag = conv_to_bag
@@ -118,7 +119,6 @@ class BreastCancerDataset(torch.utils.data.Dataset):
         filenames_list = []
         view_list = []
         patients = self.df.to_dict('records')
-
         if self.multimodal:
             for patient in patients:
                 # take 2 first rows (sorted) if 2 or more rows are present
@@ -126,7 +126,7 @@ class BreastCancerDataset(torch.utils.data.Dataset):
                     # if patient['class'][0] in ['Malignant', 'Lymph_nodes']:
                     flist = [f for f in patient['filename'] if 'L_C' in f or 'L_M' in f]
                     if len(flist) != 2:
-                        print(f"Patient {patient['filename']} has invalid combination of L CC or MLO view")
+                        self.logger.info(f"Patient {patient['filename']} has invalid combination of L CC or MLO view")
                         continue
                     filenames_list.append(flist)
                     class_names_list.append(patient['class'][0])
@@ -136,11 +136,11 @@ class BreastCancerDataset(torch.utils.data.Dataset):
                     # if patient['class'][-1] in ['Malignant', 'Lymph_nodes']:
                     flist = [f for f in patient['filename'] if 'R_C' in f or 'R_M' in f]
                     if len(flist) != 2:
-                        print(f"Patient {patient['filename']} has invalid combination of R CC or MLO view")
+                        self.logger.info(f"Patient {patient['filename']} has invalid combination of R CC or MLO view")
                         continue
                     filenames_list.append(flist)
                     class_names_list.append(patient['class'][-1])
-                    view_list.append('Rigth')
+                    view_list.append('Right')
         else:
             for patient in patients:
                 for item in range(len(patient['class'])):
@@ -157,7 +157,6 @@ class BreastCancerDataset(torch.utils.data.Dataset):
             #     class_names_list.append(patient['class'][item])
             #     filenames_list.append(patient['filename'][item])
             #     view_list.append(patient['view'][item])
-
         return view_list, filenames_list, class_names_list
 
     def __get_age(self, dcm):
