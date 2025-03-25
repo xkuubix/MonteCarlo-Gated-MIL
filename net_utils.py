@@ -97,7 +97,7 @@ def validate(model, dataloader, criterion, device, neptune_run, epoch):
     return epoch_loss
 
 
-def test(model, dataloader, device, neptune_run):
+def test(model, dataloader, device, neptune_run, fold_idx=None):
     model.eval()
     correct = 0
     total = 0
@@ -118,9 +118,14 @@ def test(model, dataloader, device, neptune_run):
 
     test_acc = correct / total
     report = classification_report(all_targets, all_preds, target_names=["Negative", "Positive"])
-    if neptune_run is not None:
-        neptune_run["test/accuracy"] = test_acc
-        neptune_run["test/classification_report"] = report  # Logs the classification report to Neptune
+    if not fold_idx:
+        if neptune_run is not None:
+            neptune_run["test/accuracy"] = test_acc
+            neptune_run["test/classification_report"] = report
+    else:
+        if neptune_run is not None:
+            neptune_run[f"test/accuracy_fold{fold_idx+1}"] = test_acc
+            neptune_run[f"test/classification_report_fold{fold_idx+1}"] = report
 
     print(f"Test Accuracy: {test_acc:.4f}")
     print("Classification Report:\n", report)
