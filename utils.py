@@ -1,5 +1,5 @@
 from pandas import DataFrame
-from torch.utils.data import DataLoader
+from torch.utils.data import DataLoader, WeightedRandomSampler
 import pandas as pd
 # from torchvision.transforms import v2 as T
 from torchvision import transforms as T
@@ -197,8 +197,9 @@ def get_fold_dataloaders(config, fold_idx):
                                        empty_thresh=config['data']['empty_threshold'])
 
     print(f"Fold {fold_idx + 1}:")
-    print_class_counts(train_dataset, val_dataset, test_dataset)
-
+    class_weights, sample_weights = print_class_counts(train_dataset,
+                                                       val_dataset,
+                                                       test_dataset)
     def seed_worker(worker_id):
         worker_seed = torch.initial_seed() % 2**32
         np.random.seed(worker_seed)
@@ -207,12 +208,23 @@ def get_fold_dataloaders(config, fold_idx):
     g = torch.Generator()
     g.manual_seed(seed)
 
+    train_sampler = None
+    train_shuffle = True
+    if config['training_plan']['weighted_sampler']:
+        train_shuffle = None
+        print(f"weighted sampler on")
+        print(class_weights)
+        train_sampler = WeightedRandomSampler(sample_weights, len(sample_weights))
+
+    print(f"{len(train_dataset)=}, {len(sample_weights)=}")
+
     train_loader = DataLoader(train_dataset,
                               batch_size=config['training_plan']['parameters']['batch_size'],
-                              shuffle=True,
+                              shuffle=train_shuffle,
                               num_workers=config['training_plan']['parameters']['num_workers'],
                               worker_init_fn=seed_worker,
-                              generator=g)
+                              generator=g,
+                              sampler=train_sampler)
 
     val_loader = DataLoader(val_dataset,
                             batch_size=config['training_plan']['parameters']['batch_size'],
@@ -235,14 +247,29 @@ def print_class_counts(train_dataset, val_dataset, test_dataset):
     train_class_counts = Counter(train_dataset.class_name)
     val_class_counts = Counter(val_dataset.class_name)
     test_class_counts = Counter(test_dataset.class_name)
-
     sorted_train_class_counts = dict(sorted(train_class_counts.items()))
     sorted_val_class_counts = dict(sorted(val_class_counts.items()))
     sorted_test_class_counts = dict(sorted(test_class_counts.items()))
-
     print(f"  Train set class counts: {sorted_train_class_counts}", end='')
     print(f"  (Total: {sum(sorted_train_class_counts.values())})")
     print(f"  Validation set class counts: {sorted_val_class_counts}", end='')
     print(f"  (Total: {sum(sorted_val_class_counts.values())})")
     print(f"  Test set class counts: {sorted_test_class_counts} (Fixed)", end='')
     print(f"  (Total: {sum(sorted_test_class_counts.values())})")
+    class_mapping = {
+        'Normal': 0,
+        'Benign': 0,
+        'Malignant': 1,
+        'Lymph_nodes': 1
+    }
+    total_samples_train = sum(sorted_train_class_counts.values())
+    group_counts = {0: 0, 1: 0}
+    for class_name, count in sorted_train_class_counts.items():
+        group_id = class_mapping[class_name]
+        group_counts[group_id] += count
+    class_weights = {
+        0: total_samples_train / group_counts[0],
+        1: total_samples_train / group_counts[1]
+    }
+    sample_weights = [class_weights[class_mapping[cls]] for cls in train_dataset.class_name]
+    return class_weights, sample_weights
