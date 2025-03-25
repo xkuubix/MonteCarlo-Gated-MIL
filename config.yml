@@ -31,6 +31,9 @@ data:
   overlap_train: 0.5
   overlap_val_test: 0.75
 
+cv_folds: 5
+  fraction_test: 0.15
+
 training_plan:
   parameters:
     batch_size: 1
