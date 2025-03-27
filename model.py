@@ -216,8 +216,8 @@ class MultiHeadGatedAttentionMIL(nn.Module):
 
             A = self.attention_weights[i](A_V * A_U)
             A = torch.transpose(A, 2, 1)  # (bs, 1, num_instances)
-            A = F.softmax(A, dim=2)
             A = self.attention_dropouts[i](A)
+            A = F.softmax(A, dim=2)
 
             A_all.append(A)
             M.append(torch.matmul(A, H))
@@ -282,8 +282,8 @@ class MultiHeadGatedAttentionMIL(nn.Module):
 
                     A = self.attention_weights[i](A_V * A_U)
                     A = torch.transpose(A, 2, 1)  # (bs, 1, num_instances)
-                    A = F.softmax(A, dim=2)
                     A = self.attention_dropouts[i](A)  # Apply dropout to attention (MCDO)
+                    A = F.softmax(A, dim=2)
 
                     A_all.append(A)
                     M.append(torch.matmul(A, H_dropout))
