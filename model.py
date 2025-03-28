@@ -231,7 +231,7 @@ class MultiHeadGatedAttentionMIL(nn.Module):
         return Y, A_all
 
 
-    def mc_inference(self, input_tensor, n=30, device='cuda'):
+    def mc_inference(self, input_tensor, N=30, device='cuda'):
         """
         Performs Monte Carlo (MC) Dropout inference for uncertainty estimation.
         
@@ -266,7 +266,7 @@ class MultiHeadGatedAttentionMIL(nn.Module):
         attention_weights_list = []
 
         with torch.no_grad():
-            for _ in range(n):
+            for _ in range(N):
                 H_dropout = self.feature_dropout(H)  # Apply dropout to extracted features (MCDO)
 
                 M = []
