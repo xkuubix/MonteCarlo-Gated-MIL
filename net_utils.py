@@ -96,6 +96,33 @@ def validate(model, dataloader, criterion, device, neptune_run, epoch):
     print(f"Epoch {epoch} - Val Loss: {epoch_loss:.4f}, Accuracy: {epoch_acc:.4f}")
     return epoch_loss
 
+def mc_validate(model, dataloader, criterion, device, neptune_run, epoch, N=50):
+    model.eval()
+    running_loss = 0.0
+    correct = 0
+    total = 0
+    
+    with torch.no_grad():
+        for batch in dataloader:
+            images, targets = batch['image'].to(device), batch['target']['label'].to(device)
+            output, _ = model.mc_inference(input_tensor=images, N=N, device=device)
+            mc_output_mean = output.mean(dim=0)
+            # output = torch.sigmoid(outputs.squeeze(0))
+            loss = criterion(mc_output_mean, targets)
+            running_loss += loss.item()
+            # preds = (output.view(-1) > 0.5).float()
+            preds = mc_output_mean.argmax(dim=1)
+            correct += (preds == targets).sum().item()
+            total += targets.size(0)
+            
+    epoch_loss = running_loss / len(dataloader)
+    epoch_acc = correct / total
+    
+    if neptune_run is not None:
+        neptune_run["val/epoch_loss"].log(epoch_loss)
+        neptune_run["val/epoch_acc"].log(epoch_acc)
+    print(f"Epoch {epoch} - Val Loss: {epoch_loss:.4f}, Accuracy: {epoch_acc:.4f}")
+    return epoch_loss
 
 def test(model, dataloader, device, neptune_run, fold_idx=None):
     model.eval()
@@ -119,6 +146,41 @@ def test(model, dataloader, device, neptune_run, fold_idx=None):
     test_acc = correct / total
     report = classification_report(all_targets, all_preds, target_names=["Negative", "Positive"])
     if not fold_idx:
+        if neptune_run is not None:
+            neptune_run["test/accuracy"] = test_acc
+            neptune_run["test/classification_report"] = report
+    else:
+        if neptune_run is not None:
+            neptune_run[f"test/accuracy_fold{fold_idx+1}"] = test_acc
+            neptune_run[f"test/classification_report_fold{fold_idx+1}"] = report
+
+    print(f"Test Accuracy: {test_acc:.4f}")
+    print("Classification Report:\n", report)
+
+
+def mc_test(model, dataloader, device, neptune_run, fold_idx=None, N=50):
+    model.eval()
+    correct = 0
+    total = 0
+    all_preds = []
+    all_targets = []
+    
+    with torch.no_grad():
+        for batch in dataloader:
+            images, targets = batch['image'].to(device), batch['target']['label'].to(device)
+            output, _ = model.mc_inference(input_tensor=images, N=N, device=device)
+            mc_output_mean = output.mean(dim=0)
+            # output = torch.sigmoid(outputs.squeeze(0))
+            preds = mc_output_mean.argmax(dim=1)
+            # preds = (output.view(-1) > 0.5).float()
+            correct += (preds == targets).sum().item()
+            total += targets.size(0)
+            all_preds.extend(preds.cpu().numpy())
+            all_targets.extend(targets.cpu().numpy())
+
+    test_acc = correct / total
+    report = classification_report(all_targets, all_preds, target_names=["Negative", "Positive"])
+    if not fold_idx+1:
         if neptune_run is not None:
             neptune_run["test/accuracy"] = test_acc
             neptune_run["test/classification_report"] = report
