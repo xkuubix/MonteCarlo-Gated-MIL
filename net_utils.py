@@ -30,7 +30,7 @@ def train(model, dataloader, criterion, optimizer, device, neptune_run, epoch):
     print(f"Epoch {epoch} - Train Loss: {epoch_loss:.4f}, Accuracy: {epoch_acc:.4f}")
 
 
-def train_gacc(model, dataloader, criterion, optimizer, device, neptune_run, epoch, accumulation_steps=8):
+def train_gacc(model, dataloader, criterion, optimizer, device, neptune_run, epoch, accumulation_steps=8, fold_idx=None):
     model.train()
     running_loss = 0.0
     correct = 0
@@ -60,16 +60,20 @@ def train_gacc(model, dataloader, criterion, optimizer, device, neptune_run, epo
 
     epoch_loss = running_loss / len(dataloader)
     epoch_acc = correct / total
-    
-    if neptune_run is not None:
-        neptune_run["train/epoch_loss"].log(epoch_loss)
-        neptune_run["train/epoch_acc"].log(epoch_acc)
+    if not fold_idx:
+        if neptune_run is not None:
+            neptune_run["train/epoch_loss"].log(epoch_loss)
+            neptune_run["train/epoch_acc"].log(epoch_acc)
+    else:
+        if neptune_run is not None:
+            neptune_run[f"{fold_idx}/train/epoch_loss"].log(epoch_loss)
+            neptune_run[f"{fold_idx}/train/epoch_acc"].log(epoch_acc)
     
     print(f"Epoch {epoch} - Train Loss: {epoch_loss:.4f}, Accuracy: {epoch_acc:.4f}")
 
 
 
-def validate(model, dataloader, criterion, device, neptune_run, epoch):
+def validate(model, dataloader, criterion, device, neptune_run, epoch, fold_idx=None):
     model.eval()
     running_loss = 0.0
     correct = 0
@@ -89,14 +93,19 @@ def validate(model, dataloader, criterion, device, neptune_run, epoch):
             
     epoch_loss = running_loss / len(dataloader)
     epoch_acc = correct / total
-    
-    if neptune_run is not None:
-        neptune_run["val/epoch_loss"].log(epoch_loss)
-        neptune_run["val/epoch_acc"].log(epoch_acc)
+    if not fold_idx:
+        if neptune_run is not None:
+            neptune_run["val/epoch_loss"].log(epoch_loss)
+            neptune_run["val/epoch_acc"].log(epoch_acc)
+    else:
+        if neptune_run is not None:
+            neptune_run[f"{fold_idx}/val/epoch_loss"].log(epoch_loss)
+            neptune_run[f"{fold_idx}/val/epoch_acc"].log(epoch_acc)
+        
     print(f"Epoch {epoch} - Val Loss: {epoch_loss:.4f}, Accuracy: {epoch_acc:.4f}")
     return epoch_loss
 
-def mc_validate(model, dataloader, criterion, device, neptune_run, epoch, N=50):
+def mc_validate(model, dataloader, criterion, device, neptune_run, epoch, N=50, fold_idx=None):
     model.eval()
     running_loss = 0.0
     correct = 0
@@ -106,21 +115,29 @@ def mc_validate(model, dataloader, criterion, device, neptune_run, epoch, N=50):
         for batch in dataloader:
             images, targets = batch['image'].to(device), batch['target']['label'].to(device)
             output, _ = model.mc_inference(input_tensor=images, N=N, device=device)
-            mc_output_mean = output.mean(dim=0)
-            # output = torch.sigmoid(outputs.squeeze(0))
-            loss = criterion(mc_output_mean, targets)
-            running_loss += loss.item()
+
+            all_losses = []
+            for i in range(N):
+                loss = criterion(output[i], targets)
+                all_losses.append(loss.item())
+            average_loss = sum(all_losses) / N
+            running_loss += average_loss
             # preds = (output.view(-1) > 0.5).float()
-            preds = mc_output_mean.argmax(dim=1)
+            preds = output.mean(dim=0).argmax(dim=-1)
             correct += (preds == targets).sum().item()
             total += targets.size(0)
             
     epoch_loss = running_loss / len(dataloader)
     epoch_acc = correct / total
-    
-    if neptune_run is not None:
-        neptune_run["val/epoch_loss"].log(epoch_loss)
-        neptune_run["val/epoch_acc"].log(epoch_acc)
+    if not fold_idx:
+        if neptune_run is not None:
+            neptune_run["val/epoch_loss"].log(epoch_loss)
+            neptune_run["val/epoch_acc"].log(epoch_acc)
+    else:
+        if neptune_run is not None:
+            neptune_run[f"{fold_idx}/val/epoch_loss"].log(epoch_loss)
+            neptune_run[f"{fold_idx}/val/epoch_acc"].log(epoch_acc)
+
     print(f"Epoch {epoch} - Val Loss: {epoch_loss:.4f}, Accuracy: {epoch_acc:.4f}")
     return epoch_loss
 
@@ -151,8 +168,8 @@ def test(model, dataloader, device, neptune_run, fold_idx=None):
             neptune_run["test/classification_report"] = report
     else:
         if neptune_run is not None:
-            neptune_run[f"test/accuracy_fold{fold_idx+1}"] = test_acc
-            neptune_run[f"test/classification_report_fold{fold_idx+1}"] = report
+            neptune_run[f"test/accuracy_fold{fold_idx}"] = test_acc
+            neptune_run[f"test/classification_report_fold{fold_idx}"] = report
 
     print(f"Test Accuracy: {test_acc:.4f}")
     print("Classification Report:\n", report)
@@ -169,6 +186,7 @@ def mc_test(model, dataloader, device, neptune_run, fold_idx=None, N=50):
         for batch in dataloader:
             images, targets = batch['image'].to(device), batch['target']['label'].to(device)
             output, _ = model.mc_inference(input_tensor=images, N=N, device=device)
+            output = torch.nn.functional.softmax(output, dim=-1)
             mc_output_mean = output.mean(dim=0)
             # output = torch.sigmoid(outputs.squeeze(0))
             preds = mc_output_mean.argmax(dim=1)
@@ -180,14 +198,14 @@ def mc_test(model, dataloader, device, neptune_run, fold_idx=None, N=50):
 
     test_acc = correct / total
     report = classification_report(all_targets, all_preds, target_names=["Negative", "Positive"])
-    if not fold_idx+1:
+    if not fold_idx:
         if neptune_run is not None:
             neptune_run["test/accuracy"] = test_acc
             neptune_run["test/classification_report"] = report
     else:
         if neptune_run is not None:
-            neptune_run[f"test/accuracy_fold{fold_idx+1}"] = test_acc
-            neptune_run[f"test/classification_report_fold{fold_idx+1}"] = report
+            neptune_run[f"test/accuracy_fold{fold_idx}"] = test_acc
+            neptune_run[f"test/classification_report_fold{fold_idx}"] = report
 
     print(f"Test Accuracy: {test_acc:.4f}")
     print("Classification Report:\n", report)
