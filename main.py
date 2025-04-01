@@ -30,6 +30,16 @@ if __name__ == "__main__":
     selected_device = config['device']
     device = torch.device(selected_device if torch.cuda.is_available() else "cpu")
     
+    if config["neptune"]:
+        run = neptune.init_run(project="ProjektMMG/MCDO")
+        run["sys/group_tags"].add(["no-BN"])
+        run["sys/group_tags"].add(["ImageNet-norm"])
+        # run["sys/group_tags"].add(["post-softmax-do"])
+        run["sys/group_tags"].add(["pre-softmax-do"])
+        run["config"] = config
+    else:
+        run = None
+
     SEED = config['seed']
     os.environ["CUBLAS_WORKSPACE_CONFIG"] = ":4096:8"  # or ":16:8"
     random.seed(SEED)
@@ -37,16 +47,12 @@ if __name__ == "__main__":
     torch.manual_seed(SEED)
     torch.cuda.manual_seed(SEED)
     torch.cuda.manual_seed_all(SEED)
-    torch.backends.cudnn.benchmark = False
-    torch.backends.cudnn.deterministic = True
+    # torch.backends.cudnn.enabled = False
+    # torch.backends.cudnn.benchmark = False
+    # torch.backends.cudnn.deterministic = True
     torch.use_deterministic_algorithms(True)
+    torch.set_default_dtype(torch.float32)
 
-    if config["neptune"]:
-        run = neptune.init_run(project="ProjektMMG/MCDO")
-        run["sys/group_tags"].add(["no-BN"])
-        run["config"] = config
-    else:
-        run = None
     model = MultiHeadGatedAttentionMIL(
         backbone=config['model'],
         feature_dropout=config['feature_dropout'],
@@ -75,8 +81,6 @@ if __name__ == "__main__":
     early_stopping = EarlyStopping(patience=config['training_plan']['parameters']['patience'], neptune_run=run)
 
     for epoch in range(1, config['training_plan']['parameters']['epochs'] + 1):
-        # train(model=model, dataloader=dataloaders['train'],
-        #       criterion=criterion, optimizer=optimizer, device=device, neptune_run=run, epoch=epoch)
         train_gacc(model=model, dataloader=dataloaders['train'],
                    criterion=criterion, optimizer=optimizer, device=device, neptune_run=run, epoch=epoch,
                    accumulation_steps=config['training_plan']['parameters']['grad_acc_steps'])
