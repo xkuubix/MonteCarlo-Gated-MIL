@@ -30,12 +30,6 @@ if __name__ == "__main__":
     selected_device = config['device']
     device = torch.device(selected_device if torch.cuda.is_available() else "cpu")
 
-    run = None
-    if config["neptune"]:
-        run = neptune.init_run(project="ProjektMMG/MCDO")
-        run["config"] = config
-        run["sys/group_tags"].add(["cross-validation"])
-
     SEED = config['seed']
     os.environ["CUBLAS_WORKSPACE_CONFIG"] = ":4096:8"
     random.seed(SEED)
@@ -48,6 +42,13 @@ if __name__ == "__main__":
     # torch.backends.cudnn.deterministic = True
     torch.use_deterministic_algorithms(True)
     torch.set_default_dtype(torch.float32)
+    
+    run = None
+    if config["neptune"]:
+        run = neptune.init_run(project="ProjektMMG/MCDO")
+        run["config"] = config
+        run["sys/group_tags"].add(["cross-validation"])
+
 
 
     k_folds = config.get("k_folds", 5)
