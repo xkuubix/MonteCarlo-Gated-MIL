@@ -132,7 +132,7 @@ class BreastCancerDataset(torch.utils.data.Dataset):
                     class_names_list.append(patient['class'][0])
                     view_list.append('Left')
                 # take 2 last rows (sorted) if 2 or more rows are present
-                elif 'RCC' in patient['view'] and 'RMLO' in patient['view']:
+                if 'RCC' in patient['view'] and 'RMLO' in patient['view']:
                     # if patient['class'][-1] in ['Malignant', 'Lymph_nodes']:
                     flist = [f for f in patient['filename'] if 'R_C' in f or 'R_M' in f]
                     if len(flist) != 2:
