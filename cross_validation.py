@@ -86,6 +86,11 @@ if __name__ == "__main__":
             raise ValueError("Optimizer not supported")
         
         early_stopping = EarlyStopping(patience=config['training_plan']['parameters']['patience'], neptune_run=run)
+        random.seed(SEED)
+        np.random.seed(SEED)
+        torch.manual_seed(SEED)
+        torch.cuda.manual_seed(SEED)
+        torch.cuda.manual_seed_all(SEED)
         for epoch in range(1, config['training_plan']['parameters']['epochs'] + 1):
             train_gacc(model=model, dataloader=dataloaders['train'],
                        criterion=criterion, optimizer=optimizer, device=device, neptune_run=run, epoch=epoch,
