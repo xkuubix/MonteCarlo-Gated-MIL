@@ -119,6 +119,11 @@ if __name__ == "__main__":
         model.apply(deactivate_batchnorm)
         model.load_state_dict(torch.load(model_name))
         model.to(device)
+        random.seed(SEED)
+        np.random.seed(SEED)
+        torch.manual_seed(SEED)
+        torch.cuda.manual_seed(SEED)
+        torch.cuda.manual_seed_all(SEED)
         if config['is_MCDO']:
             mc_test(model, test_loader, device, run, fold+1, config['N'])
         else:
