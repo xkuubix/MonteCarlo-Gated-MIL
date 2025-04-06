@@ -5,11 +5,11 @@ import torch
 from model import MultiHeadGatedAttentionMIL
 import logging
 import utils
-from net_utils import test
 import torch.nn as nn
 import matplotlib.pyplot as plt
-import seaborn as sns
 from torchvision import transforms as T
+import neptune
+import random
 
 
 def plot_attention_and_density(image, pos_att, pos_std, neg_att, neg_std, probs, item, save_path=None):
@@ -123,77 +123,121 @@ if __name__ == "__main__":
     selected_device = config['device']
     device = torch.device(selected_device if torch.cuda.is_available() else "cpu")
     
-    seed = config['seed']
-    np.random.seed(seed)
-    torch.manual_seed(seed)
-    torch.cuda.manual_seed(seed)
-    run = None
-    dataloaders = utils.get_dataloaders(config)
-    model = MultiHeadGatedAttentionMIL(
-        backbone=config['model'],
-        feature_dropout=config['feature_dropout'],
-        attention_dropout=config['attention_dropout'],
-        shared_attention=config['shared_att']
-        )
-    model.apply(deactivate_batchnorm)
-    model_path = os.path.join(config['model_path'], config['model_id'])
-    model.load_state_dict(torch.load(model_path))
-    model.to(device)
-    # test(model, dataloaders['test'], device, run)
-    patcher = dataloaders['test'].dataset.patcher
-    i = 0
-    
-    folder_path = os.path.join(config['data']['root_path'], 'figures')
-    if os.path.exists(folder_path):
-        for file in os.listdir(folder_path):
-            file_path = os.path.join(folder_path, file)
-            if os.path.isfile(file_path):
-                os.remove(file_path)
-            elif os.path.isdir(file_path):
-                shutil.rmtree(file_path)
-    
-    for item in dataloaders['test']:
-        images, targets = item['image'].to(device), item['target']['label']
-        ys, As = model.mc_inference(input_tensor=images, n=config['n'], device=device)
-        probs = torch.nn.functional.softmax(ys, dim=-1)
 
-        attention_maps = patcher.reconstruct_attention_map(
-            As.cpu(),
-            item['metadata']['tiles_indices'].squeeze(),
-            [1, config['data']['H'], config['data']['W']])
-        os.chdir(os.path.join(dataloaders['test'].dataset.root,
-                              dataloaders['test'].dataset.class_name[item['metadata']['index']]))
-        if config['data']['multimodal']:
-            image, _ = dataloaders['test'].dataset.load_dcm_multimodal(item['metadata']['index'])
-        else:
-            image = dataloaders['test'].dataset.load_dcm_unimodal(item['metadata']['index'],
-                                                                  image_only=True)
-        if item['metadata']["laterality"][0] == 'R':
-            t = T.RandomHorizontalFlip(p=1.0)
-            image = t(image)
-        # image = patcher.reconstruct_image_from_patches(images.squeeze().cpu(),
-        #                                                item['metadata']['tiles_indices'].squeeze(),
-        #                                                [3, config['data']['H'], config['data']['W']])
+    project = neptune.init_project(project="ProjektMMG/MCDO")
 
-        positive_attention_map = attention_maps[:, 1, :, :, :]  # shape: (n_passes, C, H, W)
-        negative_attention_map = attention_maps[:, 0, :, :, :]  # shape: (n_passes, C, H, W)
+    runs_table_df = project.fetch_runs_table(
+        id=[
+            "MCDO-250",
+            "MCDO-246",
+            "MCDO-255",
+            "MCDO-254",
+            # "MCDO-260" # DO post soft max
+            # "MCDO-261" # DO post soft max
+        ],
+        owner="jakub-buler",
+        state="inactive",
+        ).to_pandas()
+    k_folds = config.get("k_folds", 5)
+    for i in range(len(runs_table_df)):
+        for fold in range(k_folds):
+            # if fold != 0:
+            #     continue
+            print(f"[{runs_table_df['sys/id'][i]}]", end=' ')
+            print(f"\nFold {fold + 1}/{k_folds}")
+            SEED = config['seed']
+            os.environ["CUBLAS_WORKSPACE_CONFIG"] = ":4096:8"
+            random.seed(SEED)
+            np.random.seed(SEED)
+            torch.manual_seed(SEED)
+            torch.cuda.manual_seed(SEED)
+            torch.cuda.manual_seed_all(SEED)
+            torch.use_deterministic_algorithms(True)
+            torch.set_default_dtype(torch.float32)
+            dataloaders = utils.get_fold_dataloaders(config, fold)
+            
+            model = MultiHeadGatedAttentionMIL(
+                backbone=runs_table_df['config/model'][i],
+                feature_dropout=runs_table_df['config/feature_dropout'][i],
+                attention_dropout=runs_table_df['config/attention_dropout'][i],
+                shared_attention=runs_table_df['config/shared_att'][i]
+            )
+            model.apply(deactivate_batchnorm)
+            model_name = runs_table_df[f'fold_{fold+1}/best_model_path'][i]
+            print(f"Loaded {os.path.basename(model_name)}")
+            model.load_state_dict(torch.load(model_name, map_location=torch.device('cpu')))
+            model.to(device)
 
-        
-        mean_positive_attention = positive_attention_map.mean(dim=0).squeeze()  # Shape: (H, W)
-        mean_negative_attention = negative_attention_map.mean(dim=0).squeeze()  # Shape: (H, W)
+            patcher = dataloaders['test'].dataset.patcher
+            j = 0
+            def flush_or_create_dir(path):
+                if os.path.exists(path):
+                    shutil.rmtree(path)
+                os.makedirs(path, exist_ok=True)
 
-        i += 1
-        save_path = os.path.join(folder_path, "".join(str(i)) + "_" + item['metadata']['patient_id'][0])
-        
-        plot_attention_and_density(image,
-                                   mean_positive_attention,
-                                   mean_negative_attention,
-                                   probs,
-                                   item,
-                                   save_path)
-        print(f"done: {i}/{len(dataloaders['test'])}")
-        # if i == 40:
-        #     break
+            sys_id = runs_table_df['sys/id'][i]
+            root_path = config['data']['root_path']
+
+            # Main folder path (e.g. .../ID1)
+            main_folder = os.path.join(root_path, sys_id)
+            os.makedirs(main_folder, exist_ok=True)
+
+            # Subfolder (e.g. .../ID1/figures_f{fold})
+            fold_folder = os.path.join(main_folder, f"figures_f{fold}")
+            flush_or_create_dir(fold_folder)
+            folder_path = fold_folder
+            test_loader = dataloaders['test']
+            random.seed(SEED)
+            np.random.seed(SEED)
+            torch.manual_seed(SEED)
+            torch.cuda.manual_seed(SEED)
+            torch.cuda.manual_seed_all(SEED)
+            print("before dataloading loop")
+            for id, item in enumerate(test_loader):
+                print("inside dataloading loop")
+                images, targets = item['image'].to(device), item['target']['label']
+                ys, As = model.mc_inference(input_tensor=images, N=config['N'], device=device)
+                probs = torch.nn.functional.softmax(ys, dim=-1)
+
+                attention_maps = patcher.reconstruct_attention_map(
+                    As.cpu(),
+                    item['metadata']['tiles_indices'].squeeze(),
+                    [1, config['data']['H'], config['data']['W']])
+                os.chdir(os.path.join(dataloaders['test'].dataset.root,
+                                    dataloaders['test'].dataset.class_name[item['metadata']['index']]))
+                if config['data']['multimodal']:
+                    image, _ = dataloaders['test'].dataset.load_dcm_multimodal(item['metadata']['index'])
+                else:
+                    image = dataloaders['test'].dataset.load_dcm_unimodal(item['metadata']['index'],
+                                                                        image_only=True)
+                if item['metadata']["laterality"][0] == 'R':
+                    t = T.RandomHorizontalFlip(p=1.0)
+                    image = t(image)
+                
+                positive_attention_map = attention_maps[:, 1, :, :, :]  # shape: (n_passes, C, H, W)
+                negative_attention_map = attention_maps[:, 0, :, :, :]  # shape: (n_passes, C, H, W)
+
+                
+                mean_positive_attention = positive_attention_map.mean(dim=0).squeeze()  # Shape: (H, W)
+                std_positive_attention = positive_attention_map.std(dim=0).squeeze()  # Shape: (H, W)
+                mean_negative_attention = negative_attention_map.mean(dim=0).squeeze()  # Shape: (H, W)
+                std_negative_attention = negative_attention_map.std(dim=0).squeeze()  # Shape: (H, W)
+
+                j += 1
+                save_path = os.path.join(folder_path, "".join(str(j)) + "_" + item['metadata']['patient_id'][0])
+                
+                plot_attention_and_density(image,
+                                        mean_positive_attention,
+                                        std_positive_attention,
+                                        mean_negative_attention,
+                                        std_negative_attention,
+                                        probs,
+                                        item,
+                                        save_path)
+                print(f"done: {j}/{len(dataloaders['test'])}")
+                # if i == 40:
+                #     break
     print("FINISHED")
+    project.stop()
 
 # %%
