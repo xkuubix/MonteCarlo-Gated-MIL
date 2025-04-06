@@ -32,10 +32,11 @@ data:
   overlap_train: 0.5
   overlap_val_test: 0.75
 
-cv_folds: 5
+  cv_folds: 5
   fraction_test: 0.15
 
 training_plan:
+  weighted_sampler: True
   parameters:
     batch_size: 1
     num_workers: 8
