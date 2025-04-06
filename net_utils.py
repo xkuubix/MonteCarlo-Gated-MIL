@@ -173,6 +173,7 @@ def test(model, dataloader, device, neptune_run, fold_idx=None):
 
     print(f"Test Accuracy: {test_acc:.4f}")
     print("Classification Report:\n", report)
+    return test_acc, report
 
 
 def mc_test(model, dataloader, device, neptune_run, fold_idx=None, N=50):
@@ -209,6 +210,7 @@ def mc_test(model, dataloader, device, neptune_run, fold_idx=None, N=50):
 
     print(f"Test Accuracy: {test_acc:.4f}")
     print("Classification Report:\n", report)
+    return test_acc, report
 
 class EarlyStopping:
     def __init__(self, patience=5, neptune_run=None):
