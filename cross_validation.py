@@ -95,7 +95,7 @@ if __name__ == "__main__":
             train_gacc(model=model, dataloader=dataloaders['train'],
                        criterion=criterion, optimizer=optimizer, device=device, neptune_run=run, epoch=epoch,
                        accumulation_steps=config['training_plan']['parameters']['grad_acc_steps'], fold_idx=fold+1)
-            if config['is_MCDO']:
+            if config['is_MCDO-val']:
                 val_loss = mc_validate(model=model, dataloader=dataloaders['val'],
                                        criterion=criterion, device=device, neptune_run=run,
                                        epoch=epoch, N=config['N'], fold_idx=fold+1)
@@ -124,7 +124,7 @@ if __name__ == "__main__":
         torch.manual_seed(SEED)
         torch.cuda.manual_seed(SEED)
         torch.cuda.manual_seed_all(SEED)
-        if config['is_MCDO']:
+        if config['is_MCDO-test']:
             mc_test(model, test_loader, device, run, fold+1, config['N'])
         else:
             test(model, test_loader, device, run, fold+1)
