@@ -127,16 +127,10 @@ if __name__ == "__main__":
     project = neptune.init_project(project="ProjektMMG/MCDO")
 
     runs_table_df = project.fetch_runs_table(
-        id=[
-            "MCDO-250",
-            "MCDO-246",
-            "MCDO-255",
-            "MCDO-254",
-            # "MCDO-260" # DO post soft max
-            # "MCDO-261" # DO post soft max
-        ],
+        id=[f"MCDO-{id}" for id in range(290, 296)],
         owner="jakub-buler",
         state="inactive",
+        trashed=False,
         ).to_pandas()
     k_folds = config.get("k_folds", 5)
     for i in range(len(runs_table_df)):

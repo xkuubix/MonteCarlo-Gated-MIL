@@ -60,18 +60,11 @@ if __name__ == "__main__":
     project = neptune.init_project(project="ProjektMMG/MCDO")
 
     runs_table_df = project.fetch_runs_table(
-    id=[
-        "MCDO-250",
-        "MCDO-246",
-        "MCDO-255",
-        "MCDO-254",
-        # "MCDO-260" # DO post soft max
-        # "MCDO-261" # DO post soft max
-        ],
-    owner="jakub-buler",
-    state="inactive",  # "active" or "inactive"
-    # tag=["exploration", "optuna"],
-    ).to_pandas()
+        id=[f"MCDO-{id}" for id in range(272, 281)],
+        owner="jakub-buler",
+        state="inactive",  # "active" or "inactive"
+        trashed=False,
+        ).to_pandas()
     runs_table_df['MC-ACC'] = [None] * len(runs_table_df)
     runs_table_df['nMC-ACC'] = [None] * len(runs_table_df)
     runs_table_df['MC-REP'] = [None] * len(runs_table_df)
