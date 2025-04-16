@@ -31,7 +31,8 @@ class MultiHeadGatedAttentionMIL(nn.Module):
             D=128,
             feature_dropout=0.1,
             attention_dropout=0.1,
-            shared_attention=True):
+            shared_attention=True,
+            neptune_run=None):
 
         super().__init__()
         self.L = L
@@ -79,6 +80,12 @@ class MultiHeadGatedAttentionMIL(nn.Module):
             nn.Dropout(attention_dropout) for _ in range(self.num_classes)
         ])
 
+        if neptune_run:
+            self.fold_idx = None
+            self.neptune_run = neptune_run
+        else:
+            self.fold_idx = None
+            self.neptune_run = None
 
     def forward(self, x, N=None):
         bs, num_instances, ch, w, h = x.shape
@@ -109,11 +116,20 @@ class MultiHeadGatedAttentionMIL(nn.Module):
                 As = As.requires_grad_(True)
                 As.retain_grad()
                 M = torch.matmul(As, H) # (bs, num_classes, L)
-                Y, As, importance = self.causal_counterfactual_dropout(As, H, M, N)
+                Y, As, _, dor = self.causal_counterfactual_dropout(As, H, M, N)
+            if self.neptune_run:
+                self.neptune_run[f"{self.fold_idx}/val/do_rates/pos"].log(dor["pos"])
+                self.neptune_run[f"{self.fold_idx}/val/do_rates/neg"].log(dor["neg"])
         else:
-            M = torch.matmul(As, H) # (bs, num_classes, L)
-            Y = [self.classifiers[i](M[:, i, :]) for i in range(self.num_classes)]
-            Y = torch.cat(Y, dim=-1)  # (bs, num_classes)
+            with torch.enable_grad():
+                As = As.requires_grad_(True)
+                As.retain_grad()
+                M = torch.matmul(As, H) # (bs, num_classes, L)
+                Y, As, _, dor = self.causal_counterfactual_dropout(As, H, M, N=1)
+                Y = Y.squeeze(0)  # (bs, num_classes)
+            if self.neptune_run:
+                self.neptune_run[f"{self.fold_idx}/train/do_rates/pos"].log(dor["pos"])
+                self.neptune_run[f"{self.fold_idx}/train/do_rates/neg"].log(dor["neg"])
     
         return Y, As
     
@@ -130,30 +146,39 @@ class MultiHeadGatedAttentionMIL(nn.Module):
             retain_graph=True,
             create_graph=True
         )[0]
+        # score = (grads * As) * As.size(-1)
+        # score = (grads.abs() * As) * As.size(-1)
+        score = grads
+        importance = torch.sigmoid(score)
 
-        importance = torch.sigmoid(grads * As) 
-        importance = importance / (importance.sum(dim=-1, keepdim=True) + 1e-8)
-        
         counterfactual_Ys = []
         counterfactual_attentions = []
-
+        do_rates = {'pos': [], 'neg': []}
         for _ in range(N):
             dropout_mask = torch.bernoulli(importance).bool()
-            A_cf = As * (~dropout_mask)  # (bs, num_classes, num_instances)
+            neg_do_rate = ((~dropout_mask[:,0,:]).sum()/As.shape[-1]).detach().item()
+            pos_do_rate = ((~dropout_mask[:,1,:]).sum()/As.shape[-1]).detach().item()
+            do_rates['neg'].append(neg_do_rate)
+            do_rates['pos'].append(pos_do_rate)
+            # print(f"(-) instances to drop: {(~dropout_mask[:,0,:]).sum():4} of {As.shape[-1]:4} ({(~dropout_mask[:,0,:]).sum()/As.shape[-1]:.2%})%")
+            # print(f"(+) instances to drop: {(~dropout_mask[:,1,:]).sum():4} of {As.shape[-1]:4} ({(~dropout_mask[:,1,:]).sum()/As.shape[-1]:.2%})%")
+            A_cf = As * dropout_mask  # (bs, num_classes, num_instances)
             # A_all += torch.ones_like(A_all) # tak jak w kolaboracyjnym jednym????????
             M_cf = torch.matmul(A_cf, H)    # (bs, num_classes, L)
             Y_cf = [self.classifiers[i](M_cf[:, i, :]) for i in range(self.num_classes)]
             Y_cf = torch.cat(Y_cf, dim=-1)
             counterfactual_Ys.append(Y_cf.unsqueeze(0))
             counterfactual_attentions.append(A_cf.unsqueeze(0))
-
+        do_rates['neg'] = torch.tensor(do_rates['neg']).mean(dim=0).item()
+        do_rates['pos'] = torch.tensor(do_rates['pos']).mean(dim=0).item()
         # (n_samples, bs, num_classes),
         # (n_samples, bs, num_classes, num_instances)
         # (bs, num_classes, num_instances)
         return (
             torch.cat(counterfactual_Ys, dim=0),
             torch.cat(counterfactual_attentions, dim=0),
-            importance.detach()
+            importance.detach(),
+            do_rates
         )
 
 
