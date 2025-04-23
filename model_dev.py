@@ -121,15 +121,18 @@ class MultiHeadGatedAttentionMIL(nn.Module):
                 self.neptune_run[f"{self.fold_idx}/val/do_rates/pos"].log(dor["pos"])
                 self.neptune_run[f"{self.fold_idx}/val/do_rates/neg"].log(dor["neg"])
         else:
-            with torch.enable_grad():
-                As = As.requires_grad_(True)
-                As.retain_grad()
-                M = torch.matmul(As, H) # (bs, num_classes, L)
-                Y, As, _, dor = self.causal_counterfactual_dropout(As, H, M, N=1)
-                Y = Y.squeeze(0)  # (bs, num_classes)
-            if self.neptune_run:
-                self.neptune_run[f"{self.fold_idx}/train/do_rates/pos"].log(dor["pos"])
-                self.neptune_run[f"{self.fold_idx}/train/do_rates/neg"].log(dor["neg"])
+            M = torch.matmul(As, H) # (bs, num_classes, L)
+            Y = [self.classifiers[i](M[:, i, :]) for i in range(self.num_classes)]
+            Y = torch.cat(Y, dim=-1)  # (bs, num_classes)
+            # with torch.enable_grad():
+            #     As = As.requires_grad_(True)
+            #     As.retain_grad()
+            #     M = torch.matmul(As, H) # (bs, num_classes, L)
+            #     Y, As, _, dor = self.causal_counterfactual_dropout(As, H, M, N=1)
+            # Y = Y.squeeze(0)  # (bs, num_classes)
+            # if self.neptune_run:
+            #     self.neptune_run[f"{self.fold_idx}/train/do_rates/pos"].log(dor["pos"])
+            #     self.neptune_run[f"{self.fold_idx}/train/do_rates/neg"].log(dor["neg"])
     
         return Y, As
     
@@ -139,7 +142,6 @@ class MultiHeadGatedAttentionMIL(nn.Module):
         Y = torch.cat(Y, dim=-1)  # (bs, num_classes)
         Y = Y.requires_grad_(True)
         Y.retain_grad()
-        # compute gradients of the output w.r.t. attention weights
         grads = torch.autograd.grad( # (bs, num_classes, num_instances)
             outputs=Y.sum(dim=-1),
             inputs=As,
@@ -148,22 +150,30 @@ class MultiHeadGatedAttentionMIL(nn.Module):
         )[0]
         # score = (grads * As) * As.size(-1)
         # score = (grads.abs() * As) * As.size(-1)
+        # score = grads.abs()
         score = grads
+        # importance = torch.softmax(score, dim=-1)
         importance = torch.sigmoid(score)
+        # importance = As**2
+        # importance = importance / importance.max()
 
         counterfactual_Ys = []
         counterfactual_attentions = []
         do_rates = {'pos': [], 'neg': []}
         for _ in range(N):
-            dropout_mask = torch.bernoulli(importance).bool()
+            dropout_mask = torch.bernoulli(1 - importance).bool()
             neg_do_rate = ((~dropout_mask[:,0,:]).sum()/As.shape[-1]).detach().item()
             pos_do_rate = ((~dropout_mask[:,1,:]).sum()/As.shape[-1]).detach().item()
             do_rates['neg'].append(neg_do_rate)
             do_rates['pos'].append(pos_do_rate)
             # print(f"(-) instances to drop: {(~dropout_mask[:,0,:]).sum():4} of {As.shape[-1]:4} ({(~dropout_mask[:,0,:]).sum()/As.shape[-1]:.2%})%")
             # print(f"(+) instances to drop: {(~dropout_mask[:,1,:]).sum():4} of {As.shape[-1]:4} ({(~dropout_mask[:,1,:]).sum()/As.shape[-1]:.2%})%")
+            # As = As + torch.ones_like(As) # tak jak w kolaboracyjnym jednym????????
             A_cf = As * dropout_mask  # (bs, num_classes, num_instances)
-            # A_all += torch.ones_like(A_all) # tak jak w kolaboracyjnym jednym????????
+            # eps = 1e-8
+            # A_cf_sum = A_cf.sum(dim=2, keepdim=True) + eps  # (bs, 1, num_instances)
+            # A_cf = A_cf / A_cf_sum  # (bs, num_classes, num_instances)
+            # A_cf += torch.ones_like(A_cf) # tak jak w kolaboracyjnym jednym????????
             M_cf = torch.matmul(A_cf, H)    # (bs, num_classes, L)
             Y_cf = [self.classifiers[i](M_cf[:, i, :]) for i in range(self.num_classes)]
             Y_cf = torch.cat(Y_cf, dim=-1)
@@ -184,10 +194,12 @@ class MultiHeadGatedAttentionMIL(nn.Module):
 
 # %%
 if __name__ == '__main__':
+    # from model import MultiHeadGatedAttentionMIL as mm
     model = MultiHeadGatedAttentionMIL().to('cuda')
-    sample_input = torch.randn(1,4,3,64,64).to('cuda')
+    sample_input = torch.randn(1,10,3,224,224).to('cuda')
     sample_input.requires_grad = True
     model.eval()
     output, attention_weights = model(sample_input, N=10)
     print(output.shape)
+    print(attention_weights.shape)
 # %%
