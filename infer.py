@@ -16,11 +16,8 @@ def plot_attention_and_density(image, pos_att, pos_std, neg_att, neg_std, probs,
     fig = plt.figure(figsize=(10, 5))
     gs = fig.add_gridspec(1, 5)
 
-
     neg_att_scaling_factor = probs[:,:,0].mean(dim=(0,1)).item()
     pos_att_scaling_factor = probs[:,:,1].mean(dim=(0,1)).item()
-
-
 
     ax1 = fig.add_subplot(gs[0, 0])
     ax1.imshow(image.permute(1, 2, 0))
@@ -104,7 +101,6 @@ def plot_attention_and_density(image, pos_att, pos_std, neg_att, neg_std, probs,
 # att = torch.zeros(7000,3000)
 # # plot_attention_and_density(image, pos_att, pos_std, neg_att, neg_std, probs, item, save_path=None)
 # plot_attention_and_density(im,att,att,att,att,probs,None)
-
 # %%
 def deactivate_batchnorm(net):
     if isinstance(net, nn.BatchNorm2d):
@@ -123,7 +119,6 @@ if __name__ == "__main__":
     selected_device = config['device']
     device = torch.device(selected_device if torch.cuda.is_available() else "cpu")
     
-
     project = neptune.init_project(project="ProjektMMG/MCDO")
 
     runs_table_df = project.fetch_runs_table(
