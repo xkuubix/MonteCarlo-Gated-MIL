@@ -141,9 +141,16 @@ class MultiHeadGatedAttentionMIL(nn.Module):
             D=128,
             feature_dropout=0.1,
             attention_dropout=0.1,
-            shared_attention=True):
+            shared_attention=True,
+            neptune_run=None):
         
         super().__init__()
+        if neptune_run:
+            self.fold_idx = None
+            self.neptune_run = neptune_run
+        else:
+            self.fold_idx = None
+            self.neptune_run = None
         # TODO: adjust L for resnet50
         self.L = L
         self.D = D
