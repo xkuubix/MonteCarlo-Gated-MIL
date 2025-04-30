@@ -185,11 +185,15 @@ if __name__ == "__main__":
             for id, item in enumerate(test_loader):
                 print("inside dataloading loop")
                 images, targets = item['image'].to(device), item['target']['label']
+                model.eval()
                 ys, As = model.mc_inference(input_tensor=images, N=config['N'], device=device)
+                # ys, As = model(images, N=config['N'])
+                ys = ys.detach().cpu()
+                As = As.detach().cpu()
                 probs = torch.nn.functional.softmax(ys, dim=-1)
 
                 attention_maps = patcher.reconstruct_attention_map(
-                    As.cpu(),
+                    As,
                     item['metadata']['tiles_indices'].squeeze(),
                     [1, config['data']['H'], config['data']['W']])
                 os.chdir(os.path.join(dataloaders['test'].dataset.root,
@@ -215,14 +219,16 @@ if __name__ == "__main__":
                 j += 1
                 save_path = os.path.join(folder_path, "".join(str(j)) + "_" + item['metadata']['patient_id'][0])
                 
-                plot_attention_and_density(image,
-                                        mean_positive_attention,
-                                        std_positive_attention,
-                                        mean_negative_attention,
-                                        std_negative_attention,
-                                        probs,
-                                        item,
-                                        save_path)
+                plot_attention_and_density(
+                    image.cpu(),
+                    mean_positive_attention.cpu(),
+                    std_positive_attention.cpu(),
+                    mean_negative_attention.cpu(),
+                    std_negative_attention.cpu(),
+                    probs,
+                    item,
+                    save_path
+                )
                 print(f"done: {j}/{len(dataloaders['test'])}")
                 # if i == 40:
                 #     break
