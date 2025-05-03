@@ -64,9 +64,11 @@ if __name__ == "__main__":
             backbone=config['model'],
             feature_dropout=config['feature_dropout'],
             attention_dropout=config['attention_dropout'],
-            shared_attention=config['shared_att']
+            shared_attention=config['shared_att'],
+            neptune_run=run
         )
         model.apply(deactivate_batchnorm)
+        model.fold_idx = fold + 1
         model.to(device)
 
         if config['training_plan']['criterion'].lower() == 'bce':
