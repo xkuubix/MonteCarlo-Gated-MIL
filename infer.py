@@ -153,6 +153,8 @@ if __name__ == "__main__":
             )
             model.apply(deactivate_batchnorm)
             model_name = runs_table_df[f'fold_{fold+1}/best_model_path'][i]
+            if not os.path.exists(model_name):
+                raise FileNotFoundError(f"Model file {model_name} not found.")
             print(f"Loaded {os.path.basename(model_name)}")
             model.load_state_dict(torch.load(model_name, map_location=torch.device('cpu')))
             model.to(device)
