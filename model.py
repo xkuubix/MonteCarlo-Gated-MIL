@@ -269,11 +269,12 @@ class MultiHeadGatedAttentionMIL(nn.Module):
             if self.shared_attention:
                 A_V = self.attention_V(H_drop)  # (N, bs, num_instances, D)
                 A_U = self.attention_U(H_drop)  # (N, bs, num_instances, D)
-                A = A_V * A_U
-                # Process all classes in parallel
+                A = A_V * A_U                   # (N, bs, num_instances, D)
+
                 A = torch.stack([self.attention_weights[i](A) for i in range(self.num_classes)], dim=2)  # (N, bs, num_classes, num_instances, 1)
-                A = A.squeeze(-1).transpose(-1, -2)  # (N, bs, num_classes, num_instances)
-                A = torch.stack([self.attention_dropouts[i](A[:, :, i]) for i in range(self.num_classes)], dim=2)
+                A = A.squeeze(-1)  # (N, bs, num_classes, num_instances)
+                A = torch.stack([self.attention_dropouts[i](A[:, :, i, :]) for i in range(self.num_classes)], dim=2)
+                # (N, bs, num_classes, num_instances)
             else:
                 # For separate attention, we need to loop through classes
                 A = []
