@@ -145,6 +145,9 @@ class MultiHeadGatedAttentionMIL(nn.Module):
             neptune_run=None):
         
         super().__init__()
+
+        self.auxiliary_loss = AuxiliaryLoss(loss_type='pairwise', margin=1.0)
+
         if neptune_run:
             self.fold_idx = None
             self.neptune_run = neptune_run
@@ -203,7 +206,7 @@ class MultiHeadGatedAttentionMIL(nn.Module):
             nn.Dropout(attention_dropout) for _ in range(self.num_classes)
         ])
 
-    def forward(self, x):
+    def forward(self, x, targets=None):
         bs, num_instances, ch, w, h = x.shape
         x = x.view(bs * num_instances, ch, w, h)
         H = self.feature_extractor(x)
@@ -235,10 +238,20 @@ class MultiHeadGatedAttentionMIL(nn.Module):
         Y = [self.classifiers[i](M[:, i, :]) for i in range(self.num_classes)]
         Y = torch.cat(Y, dim=-1)  # (bs, num_classes)
 
-        return Y, A_all
+        if targets is not None:
+            is_positive = targets.item() == 1
+            scale = 1.
+            auxiliary_loss = scale * self.auxiliary_loss(A_all[:, 1, :],
+                                                        A_all[:, 0, :],
+                                                        is_positive)
+        else:
+            auxiliary_loss = None
+            # orthogonality_loss = self.orthogonality_loss(A_all[:, 0, :], A_all[:, 1, :])  # (bs, num_classes, num_instances)
+            # orthogonality_loss = torch.nn.functional.pairwise_distance(A_all[:, 0, :], A_all[:, 1, :])  # (bs, num_classes, num_instances)
+        return Y, A_all, auxiliary_loss
 
 
-    def mc_inference(self, input_tensor, N=30, device='cuda'):
+    def mc_inference(self, input_tensor, N=30, device='cuda', targets=None):
         """
         Optimized MC dropout inference that:
         1. Extracts features ONCE
@@ -299,5 +312,50 @@ class MultiHeadGatedAttentionMIL(nn.Module):
                 self.classifiers[i](M[:, :, i]) for i in range(self.num_classes)
             ], dim=-1)  # (N, bs, num_classes)
         Y = Y.squeeze(-2)
-        return Y, A
+        
+        if targets is not None:
+            losses = []
+            for i in range(N):
+                is_positive = targets.item() == 1
+                scale = 1.0
+                loss = scale * self.auxiliary_loss(A[i, :, 1, :], A[i, :, 0, :], is_positive)
+                losses.append(loss)
+        else:
+            losses = None
+       
+        return Y, A, losses
 
+
+class AuxiliaryLoss(nn.Module):
+    def __init__(self, loss_type='pairwise', margin=1.0):
+        super(AuxiliaryLoss, self).__init__()
+        self.loss_type = loss_type
+        self.margin = margin
+    def forward(self, pos_attention, neg_attention, is_positive):
+        if self.loss_type == 'pairwise':
+            return self.pairwise_distance_loss(pos_attention, neg_attention, is_positive)
+        elif self.loss_type == 'cosine':
+            return self.cosine_similarity_loss(pos_attention, neg_attention, is_positive)
+        else:
+            raise ValueError(f"Unknown loss type: {self.loss_type}")
+
+    def pairwise_distance_loss(self, pos_attention, neg_attention, is_positive):
+        distance = F.pairwise_distance(pos_attention, neg_attention, p=2)
+        if is_positive:
+            # for positive samples, maximize distance between (+) and (-) heads
+            loss = torch.mean((self.margin - distance).clamp(min=0))
+        else:
+            # for negative samples, minimize distance between (+) and (-) heads
+            loss = torch.mean(distance)
+        return loss
+
+    def cosine_similarity_loss(self, pos_attention, neg_attention, is_positive):
+        cosine_similarity = F.cosine_similarity(pos_attention, neg_attention, dim=1)
+
+        if is_positive:
+            # for positive samples, minimize cosine similarity (maximize distance)
+            loss = torch.mean(cosine_similarity)
+        else:
+            # for negative samples, maximize cosine similarity (minimize distance)
+            loss = torch.mean(1 - cosine_similarity)
+        return loss

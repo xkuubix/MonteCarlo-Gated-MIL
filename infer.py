@@ -188,7 +188,7 @@ if __name__ == "__main__":
                 print("inside dataloading loop")
                 images, targets = item['image'].to(device), item['target']['label']
                 model.eval()
-                ys, As = model.mc_inference(input_tensor=images, N=config['N'], device=device)
+                ys, As, _ = model.mc_inference(input_tensor=images, N=config['N'], device=device)
                 # ys, As = model(images, N=config['N'])
                 ys = ys.detach().cpu()
                 As = As.detach().cpu()
