@@ -146,7 +146,9 @@ class MultiHeadGatedAttentionMIL(nn.Module):
         
         super().__init__()
 
-        self.auxiliary_loss = AuxiliaryLoss(loss_type='pairwise', margin=1.0)
+        self.auxiliary_loss = AuxiliaryLoss(loss_type='pairwise',
+                                            margin=1.0,
+                                            scale=.5)
 
         if neptune_run:
             self.fold_idx = None
@@ -240,7 +242,7 @@ class MultiHeadGatedAttentionMIL(nn.Module):
 
         if targets is not None:
             is_positive = targets.item() == 1
-            scale = 1.
+            scale = self.auxiliary_loss.scale
             auxiliary_loss = scale * self.auxiliary_loss(A_all[:, 1, :],
                                                         A_all[:, 0, :],
                                                         is_positive)
@@ -317,7 +319,7 @@ class MultiHeadGatedAttentionMIL(nn.Module):
             losses = []
             for i in range(N):
                 is_positive = targets.item() == 1
-                scale = 1.0
+                scale = self.auxiliary_loss.scale
                 loss = scale * self.auxiliary_loss(A[i, :, 1, :], A[i, :, 0, :], is_positive)
                 losses.append(loss)
         else:
@@ -327,10 +329,11 @@ class MultiHeadGatedAttentionMIL(nn.Module):
 
 
 class AuxiliaryLoss(nn.Module):
-    def __init__(self, loss_type='pairwise', margin=1.0):
+    def __init__(self, loss_type='pairwise', margin=1.0, scale=1.0):
         super(AuxiliaryLoss, self).__init__()
         self.loss_type = loss_type
         self.margin = margin
+        self.scale = scale
     def forward(self, pos_attention, neg_attention, is_positive):
         if self.loss_type == 'pairwise':
             return self.pairwise_distance_loss(pos_attention, neg_attention, is_positive)
