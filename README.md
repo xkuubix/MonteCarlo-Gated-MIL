@@ -4,6 +4,8 @@ This project implements **Gated Attention Multiple Instance Learning (GA-MIL)** 
 
 ## Overview
 
+#todo add ref to paper
+
 - **Feature extractor**: Extracts features from instances / image patches. Done only once per bag.
 - **GA-MIL**: Predicts classification outcomes and generates attention maps highlighting important image features [1]. Extended to Multi-headed (MH) version, one head for positive class and one for negative.
 - **MCDO**: Enables the computation of uncertainty in both prediction probabilities and attention weights, providing uncertainty-aware attention maps [2]. Adapted within MH-GA, computed N times for MCDO inference.
