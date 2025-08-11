@@ -50,14 +50,12 @@ def train_gacc(model, dataloader, criterion, optimizer, device, neptune_run, epo
         running_dist_loss += dist_loss.item()
         
         loss = loss / accumulation_steps
-        
         loss.backward()
 
         if (batch_idx + 1) % accumulation_steps == 0 or (batch_idx + 1) == len(dataloader):
             optimizer.step()
             optimizer.zero_grad()
 
-        running_loss += loss.item() * accumulation_steps
         # preds = (output.view(-1) > 0.5).float()
         preds = output.argmax(dim=1)
         correct += (preds == targets).sum().item()
