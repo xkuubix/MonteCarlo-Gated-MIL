@@ -325,7 +325,81 @@ class MultiHeadGatedAttentionMIL(nn.Module):
         else:
             losses = None
        
-        return Y, A, losses
+        return Y, A#, losses
+
+    def mc_inference_serial(self, input_tensor, N=30, device='cuda'):
+        """
+        Performs Monte Carlo (MC) Dropout inference for uncertainty estimation.
+
+        Args:
+            input_tensor (torch.Tensor): Input of shape (bs, num_instances, ch, w, h).
+            n (int): Number of stochastic forward passes.
+            device (str): Device ('cuda' or 'cpu').
+
+        Returns:
+            predictions (torch.Tensor): Stacked predictions (n, bs, num_classes).
+            attention_weights (torch.Tensor): Stacked attention weights (n, bs, num_classes, num_instances).
+        """
+        self.eval()
+        self.to(device)
+        input_tensor = input_tensor.to(device)
+
+        def enable_dropout(m):
+            if isinstance(m, torch.nn.Dropout):
+                m.train()
+
+        self.apply(enable_dropout)
+
+        # Feature extraction (done once)
+        with torch.no_grad():
+            bs, num_instances, ch, w, h = input_tensor.shape
+            input_tensor = input_tensor.view(bs * num_instances, ch, w, h)
+            H = self.feature_extractor(input_tensor)
+            H = H.view(bs, num_instances, -1)  # Shape: (bs, num_instances, L)
+
+        predictions = []
+        attention_weights_list = []
+
+        with torch.no_grad():
+            for _ in range(N):
+                H_dropout = self.feature_dropout(H)  # Apply dropout to extracted features (MCDO)
+
+                M = []
+                A_all = []
+
+                for i in range(self.num_classes):
+                    if self.shared_attention:
+                        A_V = self.attention_V(H_dropout)
+                        A_U = self.attention_U(H_dropout)
+                    else:
+                        A_V = self.attention_V[i](H_dropout)
+                        A_U = self.attention_U[i](H_dropout)
+
+                    A = self.attention_weights[i](A_V * A_U)
+                    A = torch.transpose(A, 2, 1)  # (bs, 1, num_instances)
+                    A = self.attention_dropouts[i](A)  # Apply dropout to attention (MCDO)
+                    A = F.softmax(A, dim=2)
+
+                    A_all.append(A)
+                    M.append(torch.matmul(A, H_dropout))
+
+                M = torch.cat(M, dim=1)  # (bs, num_classes, L)
+                A_all = torch.cat(A_all, dim=1)  # (bs, num_classes, num_instances)
+
+                Y = [self.classifiers[i](M[:, i, :]) for i in range(self.num_classes)]
+                Y = torch.cat(Y, dim=-1)  # (bs, num_classes)
+
+                predictions.append(Y)
+                attention_weights_list.append(A_all)
+
+                torch.cuda.empty_cache()
+                gc.collect()
+
+        predictions = torch.stack(predictions)  # (n, bs, num_classes)
+        attention_weights_list = torch.stack(attention_weights_list)  # (n, bs, num_classes, num_instances)
+
+        return predictions, attention_weights_list
+
 
 
 class AuxiliaryLoss(nn.Module):
